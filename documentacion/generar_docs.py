@@ -21,6 +21,7 @@ DOCS = [
     ("docs/03-manual-csharp.md", "03-manual-csharp.docx"),
     ("docs/04-manual-simulador.md", "04-manual-simulador.docx"),
     ("docs/05-guia-integracion.md", "05-guia-integracion.docx"),
+    ("docs/06-manual-tramas.md", "06-manual-tramas.docx"),
 ]
 
 INLINE_RE = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]*\))")

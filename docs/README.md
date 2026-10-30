@@ -16,6 +16,8 @@ protocolo **ADS (Automation Device Specification)** de Beckhoff, más un
    variables expuestas y comportamiento del servidor.
 5. [Guía de integración y pruebas](05-guia-integracion.md) — cómo probar las tres
    piezas juntas, paso a paso.
+6. [Manual del log de tramas ADS](06-manual-tramas.md) — cómo leer la trama en
+   hexadecimal y qué significa cada campo del log de comunicación.
 
 ## Lectura rápida
 
