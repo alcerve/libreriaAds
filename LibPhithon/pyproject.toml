@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "libphithon-ads"
+version = "0.1.0"
+description = "Librería cliente ADS (Beckhoff Automation Device Specification) en Python puro"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "libreriaAds" }]
+
+[tool.setuptools.packages.find]
+include = ["ads*"]
