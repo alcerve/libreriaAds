@@ -9,6 +9,7 @@ import '../ads/ams_header.dart';
 import '../ads/constants.dart';
 import 'device.dart';
 import 'symbol_table.dart';
+import 'trama.dart';
 
 class AdsServer {
   final Device device;
@@ -75,26 +76,43 @@ class AdsServer {
     final amsBytes = Uint8List.sublistView(frame, amsTcpHeaderSize);
     final request = AmsHeader.decode(amsBytes);
 
+    // Log de la trama recibida (hex + explicación campo a campo).
+    device.log(explainFrame('RECIBIDO', frame));
+
+    Uint8List response;
     switch (request.commandId) {
       case AdsCommand.readDeviceInfo:
-        return _readDeviceInfo(request);
+        response = _readDeviceInfo(request);
+        break;
       case AdsCommand.readState:
-        return _readState(request);
+        response = _readState(request);
+        break;
       case AdsCommand.writeControl:
-        return _writeControl(request);
+        response = _writeControl(request);
+        break;
       case AdsCommand.read:
-        return _read(request);
+        response = _read(request);
+        break;
       case AdsCommand.write:
-        return _write(request);
+        response = _write(request);
+        break;
       case AdsCommand.readWrite:
-        return _readWrite(request);
+        response = _readWrite(request);
+        break;
       case AdsCommand.addDeviceNotification:
-        return _addNotification(request, socket);
+        response = _addNotification(request, socket);
+        break;
       case AdsCommand.delDeviceNotification:
-        return _delNotification(request);
+        response = _delNotification(request);
+        break;
       default:
-        return buildResponse(request, error: AdsError.unknownCommand);
+        response = buildResponse(request, error: AdsError.unknownCommand);
+        break;
     }
+
+    // Log de la trama enviada como respuesta.
+    device.log(explainFrame('ENVIADO', response));
+    return response;
   }
 
   // ------------------------------------------------------------------ info

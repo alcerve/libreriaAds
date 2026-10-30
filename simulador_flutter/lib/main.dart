@@ -247,7 +247,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
 
   Widget _buildLogs() {
     return SizedBox(
-      height: 160,
+      height: 320,
       child: Container(
         color: Colors.black87,
         padding: const EdgeInsets.all(8),
