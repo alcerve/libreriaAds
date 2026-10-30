@@ -87,7 +87,15 @@ class _SimulatorPageState extends State<SimulatorPage> {
     device.initSymbols();
     device.start();
     final server = AdsServer(device: device, tcpPort: port);
-    await server.start();
+    try {
+      await server.start();
+    } catch (e) {
+      device.stop();
+      _log('ERROR al iniciar el servidor en 127.0.0.1:$port');
+      _log('Detalle: $e');
+      _log('Pista: el puerto 48898 suele estar ocupado; prueba con 40000.');
+      return;
+    }
     setState(() {
       _device = device;
       _server = server;
