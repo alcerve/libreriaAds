@@ -62,6 +62,11 @@ class _SimulatorPageState extends State<SimulatorPage> {
   String _modo = 'Simulado';
   AdsClient? _realClient;
   Timer? _realRefreshTimer;
+  final Set<String> _seleccionadas = {};
+  final Map<String, String> _metodos = {};
+  final Set<String> _expandidas = {};
+  final TextEditingController _busquedaController = TextEditingController();
+  String _filtro = '';
 
   @override
   void initState() {
@@ -84,6 +89,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
     _ipController.dispose();
     _realRefreshTimer?.cancel();
     _realClient?.disconnect();
+    _busquedaController.dispose();
     for (final controller in _editors.values) {
       controller.dispose();
     }
@@ -195,7 +201,11 @@ class _SimulatorPageState extends State<SimulatorPage> {
       final client = _realClient;
       final device = _device;
       if (client == null || device == null) return;
-      for (final symbol in device.symbols.byName.values) {
+      for (final name in _seleccionadas.toList()) {
+        final symbol = device.symbols.byName[name];
+        if (symbol == null) continue;
+        final metodo = _metodos[name] ?? 'Leer';
+        if (metodo == 'Escribir') continue; // solo se leen Leer/Ambos
         try {
           final bytes = await client.readByName(symbol.name, symbol.size);
           symbol.value = Uint8List.fromList(bytes);
@@ -270,10 +280,12 @@ class _SimulatorPageState extends State<SimulatorPage> {
         return;
       }
       final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      final definiciones = (json['variables'] as List<dynamic>?) ?? const [];
-      _device!.loadVariableDefinitions(definiciones);
+      _device!.loadProject(json);
       setState(() {
         _editors.clear();
+        _seleccionadas.clear();
+        _metodos.clear();
+        _expandidas.clear();
         for (final symbol in _device!.symbols.byName.values) {
           _editors.putIfAbsent(symbol.name, () => TextEditingController());
         }
@@ -285,10 +297,14 @@ class _SimulatorPageState extends State<SimulatorPage> {
 
   /// Muestra un valor PLC en texto legible.
   String _displayValue(Symbol symbol) {
-    final value = decodeValue(symbol.value, symbol.plcType);
-    if (value is List) return value.join(', ');
-    if (value is double) return value.toStringAsFixed(4);
-    return value.toString();
+    try {
+      final value = decodeValue(symbol.value, symbol.plcType);
+      if (value is List) return value.join(', ');
+      if (value is double) return value.toStringAsFixed(4);
+      return value.toString();
+    } catch (_) {
+      return '(estructura, ${symbol.size} bytes)';
+    }
   }
 
   /// Convierte texto escrito por el usuario a un valor Dart según el tipo PLC.
@@ -307,6 +323,11 @@ class _SimulatorPageState extends State<SimulatorPage> {
   }
 
   void _write(Symbol symbol) {
+    final metodo = _metodos[symbol.name] ?? 'Ambos';
+    if (!_seleccionadas.contains(symbol.name) || metodo == 'Leer') {
+      _log('Selecciona la variable y elige método Escribir/Ambos para poder escribir.');
+      return;
+    }
     final text = _editors[symbol.name]?.text ?? '';
     try {
       final value = _parseValue(text, symbol.plcType);
@@ -473,41 +494,152 @@ class _SimulatorPageState extends State<SimulatorPage> {
     );
   }
 
+  void _toggleExpand(Symbol symbol, Device device) {
+    setState(() {
+      if (_expandidas.contains(symbol.name)) {
+        _expandidas.remove(symbol.name);
+        device.collapseStruct(symbol);
+      } else {
+        _expandidas.add(symbol.name);
+        device.expandStruct(symbol);
+      }
+    });
+  }
+
+  void _toggleSeleccion(Symbol symbol, bool value) {
+    setState(() {
+      if (value) {
+        _seleccionadas.add(symbol.name);
+        _metodos.putIfAbsent(symbol.name, () => 'Ambos');
+      } else {
+        _seleccionadas.remove(symbol.name);
+        _metodos.remove(symbol.name);
+      }
+    });
+  }
+
   Widget _buildSymbols(Device device) {
-    final symbols = device.symbols.byName.values.toList();
-    return ListView.builder(
-      itemCount: symbols.length,
-      itemBuilder: (context, index) {
-        final symbol = symbols[index];
-        final controller = _editors.putIfAbsent(symbol.name, () => TextEditingController());
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 180,
-                child: Text(symbol.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              ),
-              SizedBox(width: 130, child: Text(symbol.plcType)),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  decoration: InputDecoration(
-                    hintText: _displayValue(symbol),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.send),
-                tooltip: 'Escribir valor',
-                onPressed: () => _write(symbol),
-              ),
-            ],
+    final all = device.symbols.byName.values.toList();
+    final filtered = _filtro.isEmpty
+        ? all
+        : all.where((s) => s.name.toLowerCase().contains(_filtro.toLowerCase())).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          child: TextField(
+            controller: _busquedaController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Buscar variable…',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (v) => setState(() => _filtro = v),
           ),
-        );
-      },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${_seleccionadas.length} seleccionadas · ${filtered.length} mostradas',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+            ),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('Sin variables. Pulsa "Cargar" con un variables.json.'))
+              : ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) => _buildSymbolRow(filtered[index], device),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSymbolRow(Symbol symbol, Device device) {
+    final esEstructura = device.esExpandible(symbol);
+    final expandida = _expandidas.contains(symbol.name);
+    final seleccionada = _seleccionadas.contains(symbol.name);
+    final metodo = _metodos[symbol.name] ?? 'Ambos';
+    final profundidad = symbol.name.split('.').length - 1;
+
+    return Padding(
+      padding: EdgeInsets.only(left: 8.0 + profundidad * 18.0, right: 8, top: 2, bottom: 2),
+      child: Row(
+        children: [
+          if (esEstructura)
+            IconButton(
+              icon: Icon(expandida ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right),
+              visualDensity: VisualDensity.compact,
+              tooltip: expandida ? 'Colapsar' : 'Expandir',
+              onPressed: () => _toggleExpand(symbol, device),
+            )
+          else
+            const SizedBox(width: 40),
+          Checkbox(
+            value: seleccionada,
+            onChanged: (v) => _toggleSeleccion(symbol, v ?? false),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  symbol.name,
+                  style: TextStyle(
+                    fontWeight: seleccionada ? FontWeight.w700 : FontWeight.w400,
+                    fontSize: 12,
+                    color: esEstructura ? Colors.indigo.shade700 : null,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  symbol.plcType,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (seleccionada) ...[
+            DropdownButton<String>(
+              value: metodo,
+              underline: const SizedBox(),
+              style: const TextStyle(fontSize: 12),
+              items: const [
+                DropdownMenuItem(value: 'Leer', child: Text('Leer')),
+                DropdownMenuItem(value: 'Escribir', child: Text('Escribir')),
+                DropdownMenuItem(value: 'Ambos', child: Text('Ambos')),
+              ],
+              onChanged: (v) => setState(() => _metodos[symbol.name] = v ?? 'Ambos'),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 150,
+              child: TextField(
+                controller: _editors.putIfAbsent(symbol.name, () => TextEditingController()),
+                decoration: InputDecoration(
+                  hintText: _displayValue(symbol),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.send),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Escribir',
+              onPressed: () => _write(symbol),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

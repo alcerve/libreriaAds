@@ -45,6 +45,8 @@ class Device {
   final void Function(String) log;
 
   final SymbolTable symbols = SymbolTable();
+  final Map<String, List<Map<String, dynamic>>> types = {};
+  int _nextSymbolIndex = 1;
   final Uint8List ioInput = Uint8List(1024);
   final Uint8List ioOutput = Uint8List(1024);
   final Map<int, NotificationSubscription> notifications = {};
@@ -71,37 +73,67 @@ class Device {
     add('MAIN.arrValues', 'ARRAY[0..3] OF INT', [1, 2, 3, 4]);
   }
 
-  /// Carga variables desde una lista de definiciones (mapas con `name`, `type`
-  /// y `value`), reemplazando las actuales. Útil para simular las variables de
-  /// un PLC real leyéndolas de un archivo JSON.
-  void loadVariableDefinitions(List<dynamic> definitions) {
+  /// Carga un proyecto (tipos + variables) desde el JSON del conversor .tpy.
+  /// Las estructuras se mantienen como tipos; sus miembros se expanden bajo demanda.
+  void loadProject(Map<String, dynamic> project) {
     symbols.byName.clear();
     symbols.byIndex.clear();
     symbols.byHandle.clear();
+    types.clear();
+    _nextSymbolIndex = 1;
 
-    var index = 1;
-    var cargadas = 0;
-    for (final def in definitions) {
-      if (def is! Map) continue;
-      final name = def['name'];
-      final type = def['type'];
-      if (name is! String || type is! String) continue;
-      try {
-        final size = sizeOf(type);
-        final value = def['value'];
-        final Uint8List encoded;
-        if (value == null) {
-          encoded = Uint8List(size); // sin valor: se rellena con ceros
-        } else {
-          encoded = encodeValue(value, type);
+    final tipos = project['types'];
+    if (tipos is Map) {
+      for (final entry in tipos.entries) {
+        final members = entry.value;
+        if (members is List) {
+          types[entry.key] = members.map((m) => (m as Map).cast<String, dynamic>()).toList();
         }
-        symbols.add(Symbol(name, type, size, index++, encoded));
-        cargadas++;
-      } catch (e) {
-        log('ERROR cargando variable "$name" ($type): $e');
       }
     }
-    log('Variables cargadas: $cargadas');
+
+    var cargadas = 0;
+    final variables = project['variables'];
+    if (variables is List) {
+      for (final def in variables) {
+        if (def is! Map) continue;
+        final name = def['name'];
+        final type = def['type'];
+        if (name is! String || type is! String) continue;
+        final size = (def['size'] as num?)?.toInt() ?? sizeOf(type);
+        symbols.add(Symbol(name, type, size, _nextSymbolIndex++, Uint8List(size)));
+        cargadas++;
+      }
+    }
+    log('Tipos: ${types.length} | Variables cargadas: $cargadas');
+  }
+
+  /// Indica si un símbolo es una estructura expandible.
+  bool esExpandible(Symbol symbol) => types.containsKey(symbol.plcType);
+
+  /// Expande una estructura añadiendo sus miembros como símbolos (nombre.miembro).
+  void expandStruct(Symbol symbol) {
+    final members = types[symbol.plcType];
+    if (members == null) return;
+    for (final m in members) {
+      final memberName = m['name'];
+      final memberType = m['type'];
+      final memberSize = m['size'];
+      if (memberName is! String || memberType is! String || memberSize is! int) continue;
+      final fullName = '${symbol.name}.$memberName';
+      if (symbols.byName.containsKey(fullName)) continue;
+      symbols.add(Symbol(fullName, memberType, memberSize, _nextSymbolIndex++, Uint8List(memberSize)));
+    }
+  }
+
+  /// Colapsa una estructura eliminando sus miembros (y los de sus anidados).
+  void collapseStruct(Symbol symbol) {
+    final prefix = '${symbol.name}.';
+    final aQuitar = symbols.byName.keys.where((n) => n.startsWith(prefix)).toList();
+    for (final n in aQuitar) {
+      final s = symbols.byName.remove(n);
+      if (s != null) symbols.byIndex.remove(s.indexOffset);
+    }
   }
 
   void start() {
