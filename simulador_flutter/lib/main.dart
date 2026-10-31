@@ -748,7 +748,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
     final seleccionada = _seleccionadas.contains(symbol.name);
     final metodo = _metodos[symbol.name] ?? 'Ambos';
     final profundidad = symbol.name.split('.').length - 1;
-    final puedeEscribir = seleccionada && metodo != 'Leer';
+    final puedeEscribir = seleccionada && (metodo == 'Escribir' || metodo == 'Ambos');
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -841,7 +841,8 @@ class _SimulatorPageState extends State<SimulatorPage> {
     );
   }
 
-  /// Desplegable de método (Leer/Escribir/Ambos) con borde y esquinas redondeadas.
+  /// Desplegable de método (Leer/Escribir/Ambos) con borde, esquinas redondeadas
+  /// e iconos por opción.
   Widget _dropdownMetodo(String metodo, bool seleccionada, Symbol symbol) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -854,11 +855,34 @@ class _SimulatorPageState extends State<SimulatorPage> {
         child: DropdownButton<String>(
           value: metodo,
           isDense: true,
+          dropdownColor: Colors.white,
+          elevation: 4,
           style: TextStyle(fontSize: 12, color: seleccionada ? Colors.black87 : Colors.grey),
           items: const [
-            DropdownMenuItem(value: 'Leer', child: Text('Leer')),
-            DropdownMenuItem(value: 'Escribir', child: Text('Escribir')),
-            DropdownMenuItem(value: 'Ambos', child: Text('Ambos')),
+            DropdownMenuItem(
+              value: 'Leer',
+              child: Row(children: [
+                Icon(Icons.download, size: 15, color: Colors.blue),
+                SizedBox(width: 6),
+                Text('Leer'),
+              ]),
+            ),
+            DropdownMenuItem(
+              value: 'Escribir',
+              child: Row(children: [
+                Icon(Icons.upload, size: 15, color: Colors.orange),
+                SizedBox(width: 6),
+                Text('Escribir'),
+              ]),
+            ),
+            DropdownMenuItem(
+              value: 'Ambos',
+              child: Row(children: [
+                Icon(Icons.swap_horiz, size: 15, color: Colors.green),
+                SizedBox(width: 6),
+                Text('Ambos'),
+              ]),
+            ),
           ],
           onChanged: seleccionada
               ? (v) => setState(() => _metodos[symbol.name] = v ?? 'Ambos')
