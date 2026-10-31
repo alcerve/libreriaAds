@@ -8,12 +8,16 @@ class Program
 {
     static void Main(string[] args)
     {
+        // Argumentos opcionales: [puerto_tcp] [ams_net_id] [ams_port] [ip]
         int tcpPort = args.Length > 0 && int.TryParse(args[0], out var p) ? p : AdsPorts.TcpPort;
+        string amsNetId = args.Length > 1 ? args[1] : "127.0.0.1.1.1";
+        ushort amsPort = args.Length > 2 && ushort.TryParse(args[2], out var ap) ? ap : AdsPorts.PlcTc3;
+        string ipAddress = args.Length > 3 ? args[3] : "127.0.0.1";
 
         using var client = new TcAdsClient(
-            amsNetId: "127.0.0.1.1.1",
-            amsPort: AdsPorts.PlcTc3,
-            ipAddress: "127.0.0.1",
+            amsNetId: amsNetId,
+            amsPort: amsPort,
+            ipAddress: ipAddress,
             tcpPort: tcpPort,
             timeoutMs: 5000);
 

@@ -14,11 +14,15 @@ from ads import AdsClient  # noqa: E402
 
 
 def main():
+    # Argumentos opcionales: [puerto_tcp] [ams_net_id] [ams_port] [ip]
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 48898
+    net_id = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1.1.1"
+    ams_port = int(sys.argv[3]) if len(sys.argv) > 3 else 851
+    ip_address = sys.argv[4] if len(sys.argv) > 4 else "127.0.0.1"
     client = AdsClient(
-        ams_net_id="127.0.0.1.1.1",
-        ams_port=851,
-        ip_address="127.0.0.1",
+        ams_net_id=net_id,
+        ams_port=ams_port,
+        ip_address=ip_address,
         tcp_port=port,
         timeout=5.0,
     )

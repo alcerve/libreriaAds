@@ -5,8 +5,9 @@
 // sin necesidad de compilar la aplicación Flutter.
 //
 // Uso:
-//   dart bin/server.dart            # puerto por defecto 48898
-//   dart bin/server.dart 48000      # puerto personalizado
+//   dart bin/server.dart                                     # valores por defecto
+//   dart bin/server.dart 40000                               # puerto TCP
+//   dart bin/server.dart 40000 127.0.0.1.1.1 851 127.0.0.1   # todos los parámetros
 
 import 'dart:io';
 
@@ -16,13 +17,16 @@ import '../lib/simulator/ads_server.dart';
 import '../lib/simulator/device.dart';
 
 Future<void> main(List<String> args) async {
-  // Puerto TCP opcional por argumento; por defecto el estándar de AMS/TCP.
+  // Argumentos opcionales: [puerto_tcp] [ams_net_id] [ams_port] [ip]
   final port = args.isNotEmpty ? (int.tryParse(args[0]) ?? AdsPort.tcpPort) : AdsPort.tcpPort;
+  final netId = args.length > 1 ? args[1] : '127.0.0.1.1.1';
+  final amsPort = args.length > 2 ? (int.tryParse(args[2]) ?? AdsPort.plcTc3) : AdsPort.plcTc3;
+  final ip = args.length > 3 ? args[3] : '127.0.0.1';
 
   // Identidad del dispositivo simulado (NetId AMS + puerto AMS del runtime PLC).
   final device = Device(
-    netId: AmsNetId.fromString('127.0.0.1.1.1'),
-    amsPort: AdsPort.plcTc3,
+    netId: AmsNetId.fromString(netId),
+    amsPort: amsPort,
     log: (message) => stdout.writeln('[${DateTime.now().toIso8601String()}] $message'),
   );
 
@@ -31,10 +35,10 @@ Future<void> main(List<String> args) async {
   device.start();
 
   // Servidor ADS sobre TCP.
-  final server = AdsServer(device: device, tcpPort: port);
+  final server = AdsServer(device: device, tcpPort: port, bindAddress: ip);
   await server.start();
 
-  stdout.writeln('Simulador ADS en marcha en 127.0.0.1:$port (NetId 127.0.0.1.1.1, AMS port 851).');
+  stdout.writeln('Simulador ADS en marcha en $ip:$port (NetId $netId, AMS port $amsPort).');
   stdout.writeln('Pulsa Ctrl+C para detener.');
 
   // Mantiene el proceso vivo indefinidamente (hasta Ctrl+C).

@@ -14,16 +14,17 @@ import 'trama.dart';
 class AdsServer {
   final Device device;
   final int tcpPort;
+  final String bindAddress;
   ServerSocket? _server;
 
   bool get running => _server != null;
 
-  AdsServer({required this.device, required this.tcpPort});
+  AdsServer({required this.device, required this.tcpPort, this.bindAddress = '127.0.0.1'});
 
   Future<void> start() async {
-    _server = await ServerSocket.bind(InternetAddress.loopbackIPv4, tcpPort);
+    _server = await ServerSocket.bind(InternetAddress(bindAddress), tcpPort);
     _server!.listen(_onConnection);
-    device.log('Escuchando en 127.0.0.1:$tcpPort (NetId ${device.netId}, puerto AMS ${device.amsPort})');
+    device.log('Escuchando en $bindAddress:$tcpPort (NetId ${device.netId}, puerto AMS ${device.amsPort})');
   }
 
   Future<void> stop() async {

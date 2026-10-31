@@ -55,6 +55,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final TextEditingController _variablesPathController = TextEditingController(
     text: r'C:\DeepSeek Harness\libreriaAds\simulador_flutter\variables.json',
   );
+  final TextEditingController _netIdController = TextEditingController(text: '127.0.0.1.1.1');
+  final TextEditingController _amsPortController = TextEditingController(text: '851');
+  final TextEditingController _ipController = TextEditingController(text: '127.0.0.1');
 
   @override
   void initState() {
@@ -72,6 +75,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
     _refreshTimer?.cancel();
     _portController.dispose();
     _variablesPathController.dispose();
+    _netIdController.dispose();
+    _amsPortController.dispose();
+    _ipController.dispose();
     for (final controller in _editors.values) {
       controller.dispose();
     }
@@ -88,21 +94,29 @@ class _SimulatorPageState extends State<SimulatorPage> {
 
   Future<void> _start() async {
     final port = int.tryParse(_portController.text) ?? AdsPort.tcpPort;
-    final device = Device(
-      netId: AmsNetId.fromString('127.0.0.1.1.1'),
-      amsPort: AdsPort.plcTc3,
-      log: _log,
-    );
+    final amsPort = int.tryParse(_amsPortController.text) ?? AdsPort.plcTc3;
+    final netIdStr = _netIdController.text.trim();
+    final ip = _ipController.text.trim().isEmpty ? '127.0.0.1' : _ipController.text.trim();
+
+    final AmsNetId netId;
+    try {
+      netId = AmsNetId.fromString(netIdStr);
+    } catch (_) {
+      _log('ERROR: NetId AMS inválido "$netIdStr" (formato: a.b.c.d.e.f).');
+      return;
+    }
+
+    final device = Device(netId: netId, amsPort: amsPort, log: _log);
     device.initSymbols();
     device.start();
-    final server = AdsServer(device: device, tcpPort: port);
+    final server = AdsServer(device: device, tcpPort: port, bindAddress: ip);
     try {
       await server.start();
     } catch (e) {
       device.stop();
-      _log('ERROR al iniciar el servidor en 127.0.0.1:$port');
+      _log('ERROR al iniciar el servidor en $ip:$port');
       _log('Detalle: $e');
-      _log('Pista: el puerto 48898 suele estar ocupado; prueba con 40000.');
+      _log('Pista: revisa que el puerto no esté ocupado y que la IP sea correcta.');
       return;
     }
     setState(() {
@@ -125,20 +139,23 @@ class _SimulatorPageState extends State<SimulatorPage> {
   /// Lanza el cliente seleccionado (Python o C#) y muestra su salida en el log.
   Future<void> _lanzarCliente() async {
     final port = _portController.text;
+    final netId = _netIdController.text.trim();
+    final amsPort = _amsPortController.text.trim();
+    final ip = _ipController.text.trim();
     // Ruta raíz del proyecto (ajústala si mueves la carpeta).
     const raiz = r'C:\DeepSeek Harness\libreriaAds';
 
-    _log('=== Lanzando cliente $_libreriaSeleccionada (puerto $port) ===');
+    _log('=== Lanzando cliente $_libreriaSeleccionada ($ip:$port, NetId $netId, AMS $amsPort) ===');
     try {
       final process = _libreriaSeleccionada == 'Python'
           ? await Process.start(
               'python',
-              ['examples/verify_simulator.py', port],
+              ['examples/verify_simulator.py', port, netId, amsPort, ip],
               workingDirectory: '$raiz\\LibPhithon',
             )
           : await Process.start(
               'dotnet',
-              ['run', '--', port],
+              ['run', '--', port, netId, amsPort, ip],
               workingDirectory: '$raiz\\LibC#\\examples\\AdsExample',
             );
 
@@ -254,6 +271,22 @@ class _SimulatorPageState extends State<SimulatorPage> {
     );
   }
 
+  Widget _paramField(String label, TextEditingController controller, double width, {bool enabled = true}) {
+    return SizedBox(
+      width: width,
+      child: TextField(
+        controller: controller,
+        enabled: enabled,
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
   Widget _buildControls(bool running) {
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -261,24 +294,22 @@ class _SimulatorPageState extends State<SimulatorPage> {
         children: [
           Row(
             children: [
-              SizedBox(
-                width: 120,
-                child: TextField(
-                  controller: _portController,
-                  enabled: !running,
-                  decoration: const InputDecoration(
-                    labelText: 'Puerto TCP',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 12),
+              _paramField('NetId AMS', _netIdController, 150, enabled: !running),
+              const SizedBox(width: 8),
+              _paramField('Puerto AMS', _amsPortController, 90, enabled: !running),
+              const SizedBox(width: 8),
+              _paramField('IP escucha', _ipController, 110, enabled: !running),
+              const SizedBox(width: 8),
+              _paramField('Puerto TCP', _portController, 90, enabled: !running),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               Expanded(
                 child: Text(
                   running
-                      ? 'ESCUCHANDO en 127.0.0.1:${_portController.text} (AMS 127.0.0.1.1.1:851)'
+                      ? 'ESCUCHANDO en ${_ipController.text}:${_portController.text} (NetId ${_netIdController.text}, AMS ${_amsPortController.text})'
                       : 'Servidor detenido',
                   style: TextStyle(
                     color: running ? Colors.green.shade700 : Colors.grey,
