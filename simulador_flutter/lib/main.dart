@@ -12,6 +12,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'ads/ads_client.dart';
 import 'ads/ams_header.dart';
 import 'ads/constants.dart';
 import 'ads/datatypes.dart';
@@ -58,6 +59,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final TextEditingController _netIdController = TextEditingController(text: '127.0.0.1.1.1');
   final TextEditingController _amsPortController = TextEditingController(text: '851');
   final TextEditingController _ipController = TextEditingController(text: '127.0.0.1');
+  String _modo = 'Simulado';
+  AdsClient? _realClient;
+  Timer? _realRefreshTimer;
 
   @override
   void initState() {
@@ -78,6 +82,8 @@ class _SimulatorPageState extends State<SimulatorPage> {
     _netIdController.dispose();
     _amsPortController.dispose();
     _ipController.dispose();
+    _realRefreshTimer?.cancel();
+    _realClient?.disconnect();
     for (final controller in _editors.values) {
       controller.dispose();
     }
@@ -106,6 +112,11 @@ class _SimulatorPageState extends State<SimulatorPage> {
       return;
     }
 
+    if (_modo == 'Real') {
+      await _conectarReal(netId, amsPort, ip, port);
+      return;
+    }
+
     final device = Device(netId: netId, amsPort: amsPort, log: _log);
     device.initSymbols();
     device.start();
@@ -122,6 +133,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
     setState(() {
       _device = device;
       _server = server;
+      _realClient = null;
       for (final symbol in device.symbols.byName.values) {
         _editors.putIfAbsent(symbol.name, () => TextEditingController());
       }
@@ -129,11 +141,72 @@ class _SimulatorPageState extends State<SimulatorPage> {
   }
 
   Future<void> _stop() async {
+    if (_modo == 'Real') {
+      _realRefreshTimer?.cancel();
+      _realRefreshTimer = null;
+      _realClient?.disconnect();
+      setState(() {
+        _realClient = null;
+        _device = null;
+      });
+      _log('Desconectado del PLC real.');
+      return;
+    }
     await _server?.stop();
     setState(() {
       _server = null;
       _device = null;
     });
+  }
+
+  /// Conecta con un PLC real y empieza a leer sus variables periódicamente.
+  Future<void> _conectarReal(AmsNetId netId, int amsPort, String ip, int port) async {
+    final client = AdsClient(targetNetId: netId, amsPort: amsPort, ipAddress: ip, tcpPort: port);
+    try {
+      await client.connect();
+    } catch (e) {
+      _log('ERROR al conectar con el PLC real en $ip:$port');
+      _log('Detalle: $e');
+      return;
+    }
+    final device = Device(netId: netId, amsPort: amsPort, log: _log);
+    device.initSymbols();
+    setState(() {
+      _device = device;
+      _server = null;
+      _realClient = client;
+      for (final symbol in device.symbols.byName.values) {
+        _editors.putIfAbsent(symbol.name, () => TextEditingController());
+      }
+    });
+    _log('Conectado al PLC real en $ip:$port (NetId $netId, AMS $amsPort).');
+    _realRefreshTimer?.cancel();
+    _realRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) => _refrescarReal());
+    _refrescarReal();
+  }
+
+  bool _refrescandoReal = false;
+
+  /// Lee las variables del PLC real y actualiza la tabla.
+  Future<void> _refrescarReal() async {
+    if (_refrescandoReal) return;
+    _refrescandoReal = true;
+    try {
+      final client = _realClient;
+      final device = _device;
+      if (client == null || device == null) return;
+      for (final symbol in device.symbols.byName.values) {
+        try {
+          final bytes = await client.readByName(symbol.name, symbol.size);
+          symbol.value = Uint8List.fromList(bytes);
+        } catch (_) {
+          // error de lectura puntual: se reintentará en el siguiente ciclo
+        }
+      }
+      if (mounted) setState(() {});
+    } finally {
+      _refrescandoReal = false;
+    }
   }
 
   /// Lanza el cliente seleccionado (Python o C#) y muestra su salida en el log.
@@ -237,9 +310,16 @@ class _SimulatorPageState extends State<SimulatorPage> {
     final text = _editors[symbol.name]?.text ?? '';
     try {
       final value = _parseValue(text, symbol.plcType);
-      symbol.value = encodeValue(value, symbol.plcType);
-      _device?.notifySymbolChanged(symbol);
-      _log('Escritura local en ${symbol.name} = ${_displayValue(symbol)}');
+      final encoded = encodeValue(value, symbol.plcType);
+      if (_modo == 'Real' && _realClient != null) {
+        _realClient!.writeByName(symbol.name, encoded);
+        symbol.value = encoded;
+        _log('Escritura en PLC real: ${symbol.name} = ${_displayValue(symbol)}');
+      } else {
+        symbol.value = encoded;
+        _device?.notifySymbolChanged(symbol);
+        _log('Escritura local en ${symbol.name} = ${_displayValue(symbol)}');
+      }
     } catch (e) {
       _log('Valor inválido para ${symbol.name}: $e');
     }
@@ -294,13 +374,24 @@ class _SimulatorPageState extends State<SimulatorPage> {
         children: [
           Row(
             children: [
-              _paramField('NetId AMS', _netIdController, 150, enabled: !running),
+              const Text('Modo:'),
               const SizedBox(width: 8),
-              _paramField('Puerto AMS', _amsPortController, 90, enabled: !running),
+              DropdownButton<String>(
+                value: _modo,
+                items: const [
+                  DropdownMenuItem(value: 'Simulado', child: Text('PLC Simulado')),
+                  DropdownMenuItem(value: 'Real', child: Text('PLC Real')),
+                ],
+                onChanged: running ? null : (v) => setState(() => _modo = v ?? 'Simulado'),
+              ),
+              const SizedBox(width: 12),
+              _paramField('NetId AMS', _netIdController, 130, enabled: !running),
               const SizedBox(width: 8),
-              _paramField('IP escucha', _ipController, 110, enabled: !running),
+              _paramField('Puerto AMS', _amsPortController, 80, enabled: !running),
               const SizedBox(width: 8),
-              _paramField('Puerto TCP', _portController, 90, enabled: !running),
+              _paramField('IP', _ipController, 100, enabled: !running),
+              const SizedBox(width: 8),
+              _paramField('Puerto TCP', _portController, 80, enabled: !running),
             ],
           ),
           const SizedBox(height: 8),
