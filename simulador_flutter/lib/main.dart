@@ -6,6 +6,8 @@
 // registro de conexiones y errores.
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -49,6 +51,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final List<String> _logs = [];
   final Map<String, TextEditingController> _editors = {};
   Timer? _refreshTimer;
+  String _libreriaSeleccionada = 'Python';
 
   @override
   void initState() {
@@ -115,6 +118,46 @@ class _SimulatorPageState extends State<SimulatorPage> {
     });
   }
 
+  /// Lanza el cliente seleccionado (Python o C#) y muestra su salida en el log.
+  Future<void> _lanzarCliente() async {
+    final port = _portController.text;
+    // Ruta raíz del proyecto (ajústala si mueves la carpeta).
+    const raiz = r'C:\DeepSeek Harness\libreriaAds';
+
+    _log('=== Lanzando cliente $_libreriaSeleccionada (puerto $port) ===');
+    try {
+      final process = _libreriaSeleccionada == 'Python'
+          ? await Process.start(
+              'python',
+              ['examples/verify_simulator.py', port],
+              workingDirectory: '$raiz\\LibPhithon',
+            )
+          : await Process.start(
+              'dotnet',
+              ['run', '--', port],
+              workingDirectory: '$raiz\\LibC#\\examples\\AdsExample',
+            );
+
+      process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) {
+        if (line.trim().isNotEmpty) _log('CLIENTE> $line');
+      });
+      process.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) {
+        if (line.trim().isNotEmpty) _log('CLIENTE> $line');
+      });
+
+      final code = await process.exitCode;
+      _log('=== Cliente $_libreriaSeleccionada terminado (código $code) ===');
+    } catch (e) {
+      _log('ERROR lanzando el cliente $_libreriaSeleccionada: $e');
+    }
+  }
+
   /// Muestra un valor PLC en texto legible.
   String _displayValue(Symbol symbol) {
     final value = decodeValue(symbol.value, symbol.plcType);
@@ -179,38 +222,70 @@ class _SimulatorPageState extends State<SimulatorPage> {
   Widget _buildControls(bool running) {
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: Row(
+      child: Column(
         children: [
-          SizedBox(
-            width: 120,
-            child: TextField(
-              controller: _portController,
-              enabled: !running,
-              decoration: const InputDecoration(
-                labelText: 'Puerto TCP',
-                border: OutlineInputBorder(),
-                isDense: true,
+          Row(
+            children: [
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _portController,
+                  enabled: !running,
+                  decoration: const InputDecoration(
+                    labelText: 'Puerto TCP',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
               ),
-              keyboardType: TextInputType.number,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              running
-                  ? 'ESCUCHANDO en 127.0.0.1:${_portController.text} (AMS 127.0.0.1.1.1:851)'
-                  : 'Servidor detenido',
-              style: TextStyle(
-                color: running ? Colors.green.shade700 : Colors.grey,
-                fontWeight: FontWeight.bold,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  running
+                      ? 'ESCUCHANDO en 127.0.0.1:${_portController.text} (AMS 127.0.0.1.1.1:851)'
+                      : 'Servidor detenido',
+                  style: TextStyle(
+                    color: running ? Colors.green.shade700 : Colors.grey,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed: running ? _stop : _start,
+                icon: Icon(running ? Icons.stop : Icons.play_arrow),
+                label: Text(running ? 'Detener' : 'Iniciar'),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: running ? _stop : _start,
-            icon: Icon(running ? Icons.stop : Icons.play_arrow),
-            label: Text(running ? 'Detener' : 'Iniciar'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Librería a probar:'),
+              const SizedBox(width: 8),
+              DropdownButton<String>(
+                value: _libreriaSeleccionada,
+                items: const [
+                  DropdownMenuItem(value: 'Python', child: Text('Python (LibPhithon)')),
+                  DropdownMenuItem(value: 'C#', child: Text('C# (LibC#)')),
+                ],
+                onChanged: (v) => setState(() => _libreriaSeleccionada = v ?? 'Python'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'El cliente elegido se conecta al simulador y las tramas se ven abajo.',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: running ? _lanzarCliente : null,
+                icon: const Icon(Icons.play_circle_outline),
+                label: const Text('Probar cliente'),
+              ),
+            ],
           ),
         ],
       ),
