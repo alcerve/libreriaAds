@@ -45,7 +45,7 @@ class SimulatorPage extends StatefulWidget {
 class _SimulatorPageState extends State<SimulatorPage> {
   Device? _device;
   AdsServer? _server;
-  final TextEditingController _portController = TextEditingController(text: '48898');
+  final TextEditingController _portController = TextEditingController(text: '40000');
   final List<String> _logs = [];
   final Map<String, TextEditingController> _editors = {};
   Timer? _refreshTimer;
@@ -57,6 +57,8 @@ class _SimulatorPageState extends State<SimulatorPage> {
     _refreshTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
       if (mounted) setState(() {});
     });
+    // Auto-inicia el servidor al abrir la app: menos pasos para el usuario.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
   @override
