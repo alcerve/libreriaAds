@@ -82,6 +82,7 @@ NetId `127.0.0.1.1.1` y puerto AMS `851`.
 | `lib/ads/ams_header.dart` | Encode/decode de frame AMS/TCP y cabecera AMS. |
 | `lib/ads/constants.dart` | Comandos, grupos de índice, estados, puertos y errores. |
 | `lib/ads/datatypes.dart` | Codificación de tipos PLC. |
+| `lib/ads/ads_client.dart` | Cliente ADS para el modo "PLC Real". |
 | `lib/simulator/symbol_table.dart` | Tabla de símbolos y handles. |
 | `lib/simulator/device.dart` | Estado del PLC, variables y notificaciones. |
 | `lib/simulator/ads_server.dart` | Servidor TCP y despacho de comandos. |
@@ -90,9 +91,42 @@ NetId `127.0.0.1.1.1` y puerto AMS `851`.
 
 La UI permite:
 
-- **Iniciar/Detener** el servidor.
-- **Cambiar el puerto TCP** (antes de iniciar).
-- Ver la **tabla de variables** en vivo (nombre, tipo y valor; `MAIN.nCounter`
-  se actualiza automáticamente).
-- **Editar** cada variable (campo de texto + botón de escritura).
-- Consultar el **registro** de conexiones y errores.
+- **Iniciar/Detener** y elegir **Modo** (PLC Simulado / PLC Real).
+- Configurar **NetId AMS, Puerto AMS, IP y Puerto TCP**.
+- **Buscar** variables y **seleccionar** las que quieras usar (checkbox).
+- Elegir el **método** de cada variable seleccionada: **Leer**, **Escribir** o **Ambos**.
+- **Expandir estructuras** (flecha ▶) para ver/editar cada miembro por separado.
+- **Lanzar el cliente** Python/C# elegido.
+- Consultar el **registro** de conexiones y tramas.
+
+## 4.10. Modo PLC Simulado vs PLC Real
+
+| Modo | Comportamiento |
+|------|----------------|
+| **PLC Simulado** | El simulador actúa como **servidor** ADS; los clientes se conectan a él. |
+| **PLC Real** | El simulador actúa como **cliente** ADS: se conecta a tu PLC TwinCAT real y lee/escribe sus variables. |
+
+En **PLC Real**, la tabla se actualiza sola cada segundo leyendo **solo las
+variables seleccionadas** (método Leer/Ambos). Al escribir una variable
+seleccionada (método Escribir/Ambos), la escritura se envía al PLC real.
+
+## 4.11. Selección de variables y estructuras
+
+- Tras **Cargar** un `variables.json` (generado desde el `.tpy`), se listan los
+  símbolos de nivel superior (y los miembros expandidos).
+- Marca con el **checkbox** las variables que quieras usar; no se leen todas.
+- Cada variable seleccionada tiene un **método**: `Leer`, `Escribir` o `Ambos`.
+- Las **estructuras** (tipos propios) se muestran en azul con una flecha ▶; al
+  pulsarla se expanden sus miembros (nombres con punto, p. ej.
+  `GVL.Estructura.Campo`), cada uno seleccionable y editable por separado.
+
+## 4.12. Convertir un .tpy de TwinCAT
+
+```powershell
+cd simulador_flutter
+python convertir_tpy.py PLC_Portale.tpy variables.json
+```
+
+Genera un `variables.json` con dos secciones:
+- `types`: definición de las estructuras (miembros con nombre, tipo y tamaño).
+- `variables`: símbolos de nivel superior (nombre, tipo y tamaño).
