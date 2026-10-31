@@ -22,6 +22,7 @@ import 'simulator/ads_server.dart';
 import 'simulator/device.dart';
 import 'simulator/symbol_table.dart';
 import 'simulator/tpy_parser.dart';
+import 'simulator/trama.dart';
 
 void main() => runApp(const AdsSimulatorApp());
 
@@ -350,6 +351,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
     try {
       final value = _parseValue(text, symbol.plcType);
       final encoded = encodeValue(value, symbol.plcType);
+      _log(explainFrame('ENVIADO (escritura)', _buildWriteFrame(symbol.name, encoded)));
       if (_modo == 'Real' && _realClient != null) {
         _realClient!.writeByName(symbol.name, encoded);
         symbol.value = encoded;
@@ -370,6 +372,38 @@ class _SimulatorPageState extends State<SimulatorPage> {
         _log('Valor inválido para ${symbol.name} (${symbol.plcType}): $e');
       }
     }
+  }
+
+  /// Construye la trama ADS de escritura (WRITE por nombre) que se enviaría a un
+  /// PLC, para mostrarla explicada en el log de comunicación.
+  Uint8List _buildWriteFrame(String name, Uint8List value) {
+    final nb = Uint8List.fromList(utf8.encode(name));
+    final payload = Uint8List(12 + nb.length + 4 + value.length);
+    final d = ByteData.sublistView(payload);
+    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little);
+    d.setUint32(4, 0, Endian.little);
+    d.setUint32(8, nb.length, Endian.little);
+    payload.setRange(12, 12 + nb.length, nb);
+    d.setUint32(12 + nb.length, value.length, Endian.little);
+    payload.setRange(16 + nb.length, 16 + nb.length + value.length, value);
+
+    AmsNetId targetNetId;
+    try {
+      targetNetId = AmsNetId.fromString(_netIdController.text);
+    } catch (_) {
+      targetNetId = AmsNetId.empty();
+    }
+
+    final header = AmsHeader()
+      ..targetNetId = targetNetId
+      ..targetPort = int.tryParse(_amsPortController.text) ?? 851
+      ..sourceNetId = AmsNetId.fromString('127.0.0.1.1.1')
+      ..sourcePort = 30000
+      ..commandId = AdsCommand.write
+      ..stateFlags = 0
+      ..invokeId = 1
+      ..data = payload;
+    return buildTcpFrame(header.encode());
   }
 
   @override
@@ -626,6 +660,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
       if (value) {
         _seleccionadas.add(symbol.name);
         _metodos.putIfAbsent(symbol.name, () => 'Ambos');
+        // Rellenamos el campo con el valor actual para que se pueda editar directamente.
+        final controller = _editors.putIfAbsent(symbol.name, () => TextEditingController());
+        controller.text = _displayValue(symbol);
       } else {
         _seleccionadas.remove(symbol.name);
         _metodos.remove(symbol.name);
