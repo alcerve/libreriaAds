@@ -737,17 +737,49 @@ class _SimulatorPageState extends State<SimulatorPage> {
 
   Widget _buildLogs() {
     return SizedBox(
-      height: 320,
-      child: Container(
-        color: Colors.black87,
-        padding: const EdgeInsets.all(8),
-        child: ListView.builder(
-          itemCount: _logs.length,
-          itemBuilder: (context, index) => Text(
-            _logs[index],
-            style: const TextStyle(color: Colors.lightGreen, fontFamily: 'monospace', fontSize: 12),
+      height: 340,
+      child: Column(
+        children: [
+          Container(
+            color: Colors.grey.shade900,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.terminal, size: 16, color: Colors.lightGreen),
+                const SizedBox(width: 6),
+                const Text(
+                  'Log de comunicación',
+                  style: TextStyle(color: Colors.lightGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() => _logs.clear()),
+                  child: const Text('Limpiar', style: TextStyle(color: Colors.lightGreen, fontSize: 11)),
+                ),
+              ],
+            ),
           ),
-        ),
+          Expanded(
+            child: Container(
+              color: Colors.black87,
+              padding: const EdgeInsets.all(8),
+              child: _logs.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Sin actividad. Pulsa "Probar cliente" o conecta un cliente Python/C#.',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _logs.length,
+                      itemBuilder: (context, index) => Text(
+                        _logs[index],
+                        style: const TextStyle(color: Colors.lightGreen, fontFamily: 'monospace', fontSize: 12),
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
