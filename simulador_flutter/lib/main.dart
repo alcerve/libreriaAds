@@ -67,6 +67,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final Set<String> _expandidas = {};
   final TextEditingController _busquedaController = TextEditingController();
   String _filtro = '';
+  final Map<String, TextEditingController> _indexControllers = {};
 
   @override
   void initState() {
@@ -90,6 +91,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
     _realRefreshTimer?.cancel();
     _realClient?.disconnect();
     _busquedaController.dispose();
+    for (final c in _indexControllers.values) {
+      c.dispose();
+    }
     for (final controller in _editors.values) {
       controller.dispose();
     }
@@ -487,11 +491,75 @@ class _SimulatorPageState extends State<SimulatorPage> {
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Cargar'),
               ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: _guardarVariables,
+                icon: const Icon(Icons.save),
+                label: const Text('Guardar'),
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  /// Expande la posición [index] de un array (de estructuras o de tipos simples).
+  void _expandArrayIndex(Symbol symbol) {
+    final device = _device;
+    final parsed = device?.parseArrayType(symbol.plcType);
+    if (device == null || parsed == null) return;
+    final (lo, hi, _) = parsed;
+    final index = int.tryParse(_indexControllers[symbol.name]?.text.trim() ?? '') ?? lo;
+    final i = index < lo ? lo : (index > hi ? hi : index);
+    setState(() {
+      device.collapseStruct(symbol); // quita los índices expandidos anteriores
+      _expandidas.removeWhere((n) => n.startsWith('${symbol.name}['));
+      device.expandArrayElement(symbol, i);
+      _expandidas.add('${symbol.name}[$i]');
+    });
+  }
+
+  /// Guarda las variables actuales (con sus valores escalares) en el archivo JSON.
+  void _guardarVariables() {
+    final device = _device;
+    if (device == null) {
+      _log('No hay variables cargadas para guardar.');
+      return;
+    }
+    final path = _variablesPathController.text.trim();
+    if (path.isEmpty) {
+      _log('ERROR: escribe la ruta del archivo de destino.');
+      return;
+    }
+    try {
+      final variables = <Map<String, dynamic>>[];
+      for (final symbol in device.symbols.byName.values) {
+        final item = <String, dynamic>{
+          'name': symbol.name,
+          'type': symbol.plcType,
+          'size': symbol.size,
+        };
+        try {
+          final value = decodeValue(symbol.value, symbol.plcType);
+          if (value is bool || value is num || value is String) {
+            item['value'] = value;
+          }
+        } catch (_) {
+          // estructura o tipo no serializable: se omite el valor
+        }
+        variables.add(item);
+      }
+      final types = <String, dynamic>{};
+      for (final e in device.types.entries) {
+        types[e.key] = e.value;
+      }
+      final json = {'types': types, 'variables': variables};
+      File(path).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(json));
+      _log('Variables guardadas en $path (${variables.length} símbolos).');
+    } catch (e) {
+      _log('ERROR guardando variables: $e');
+    }
   }
 
   void _toggleExpand(Symbol symbol, Device device) {
@@ -563,6 +631,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
 
   Widget _buildSymbolRow(Symbol symbol, Device device) {
     final esEstructura = device.esExpandible(symbol);
+    final bounds = device.parseArrayType(symbol.plcType);
+    final esArray = bounds != null;
+    final defaultIndex = bounds != null ? '${bounds.$1}' : '0';
     final expandida = _expandidas.contains(symbol.name);
     final seleccionada = _seleccionadas.contains(symbol.name);
     final metodo = _metodos[symbol.name] ?? 'Ambos';
@@ -579,6 +650,27 @@ class _SimulatorPageState extends State<SimulatorPage> {
               tooltip: expandida ? 'Colapsar' : 'Expandir',
               onPressed: () => _toggleExpand(symbol, device),
             )
+          else if (esArray)
+            ...[
+              SizedBox(
+                width: 52,
+                child: TextField(
+                  controller: _indexControllers.putIfAbsent(
+                    symbol.name,
+                    () => TextEditingController(text: defaultIndex),
+                  ),
+                  decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                  style: const TextStyle(fontSize: 12),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.unfold_more, size: 18),
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Expandir índice del array',
+                onPressed: () => _expandArrayIndex(symbol),
+              ),
+            ]
           else
             const SizedBox(width: 40),
           Checkbox(

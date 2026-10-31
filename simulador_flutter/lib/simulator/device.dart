@@ -126,10 +126,56 @@ class Device {
     }
   }
 
-  /// Colapsa una estructura eliminando sus miembros (y los de sus anidados).
+  /// Analiza "ARRAY [a..b] OF X" y devuelve (límiteInferior, límiteSuperior,
+  /// tipoElemento), o null si no es un array simple unidimensional.
+  (int, int, String)? parseArrayType(String type) {
+    final m = RegExp(r'^ARRAY\s*\[([^\]]*)\]\s+OF\s+(.+)$', caseSensitive: false)
+        .firstMatch(type.trim());
+    if (m == null) return null;
+    final firstDim = m.group(1)!.split(',').first.trim();
+    final b = RegExp(r'^(-?\d+)\s*\.\.\s*(-?\d+)$').firstMatch(firstDim);
+    if (b == null) return null;
+    return (int.parse(b.group(1)!), int.parse(b.group(2)!), m.group(2)!.trim());
+  }
+
+  bool esArray(Symbol symbol) => parseArrayType(symbol.plcType) != null;
+
+  /// Expande el elemento [index] de un array:
+  /// - Si el elemento es una estructura, añade sus miembros (Array[i].Miembro).
+  /// - Si es un tipo simple o anidado, añade un único símbolo Array[i].
+  void expandArrayElement(Symbol symbol, int index) {
+    final parsed = parseArrayType(symbol.plcType);
+    if (parsed == null) return;
+    final (lo, hi, elemType) = parsed;
+    if (index < lo || index > hi) return;
+    final elemSize = symbol.size ~/ (hi - lo + 1);
+    final prefix = '${symbol.name}[$index]';
+
+    final members = types[elemType];
+    if (members != null) {
+      for (final m in members) {
+        final mn = m['name'];
+        final mt = m['type'];
+        final ms = m['size'];
+        if (mn is! String || mt is! String || ms is! int) continue;
+        final full = '$prefix.$mn';
+        if (symbols.byName.containsKey(full)) continue;
+        symbols.add(Symbol(full, mt, ms, _nextSymbolIndex++, Uint8List(ms)));
+      }
+    } else {
+      if (!symbols.byName.containsKey(prefix)) {
+        symbols.add(Symbol(prefix, elemType, elemSize, _nextSymbolIndex++, Uint8List(elemSize)));
+      }
+    }
+  }
+
+  /// Colapsa una estructura o un array eliminando sus miembros/elementos.
   void collapseStruct(Symbol symbol) {
-    final prefix = '${symbol.name}.';
-    final aQuitar = symbols.byName.keys.where((n) => n.startsWith(prefix)).toList();
+    final prefixDot = '${symbol.name}.';
+    final prefixBracket = '${symbol.name}[';
+    final aQuitar = symbols.byName.keys
+        .where((n) => n.startsWith(prefixDot) || n.startsWith(prefixBracket))
+        .toList();
     for (final n in aQuitar) {
       final s = symbols.byName.remove(n);
       if (s != null) symbols.byIndex.remove(s.indexOffset);
