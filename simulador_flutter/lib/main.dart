@@ -360,7 +360,15 @@ class _SimulatorPageState extends State<SimulatorPage> {
         _log('Escritura local en ${symbol.name} = ${_displayValue(symbol)}');
       }
     } catch (e) {
-      _log('Valor inválido para ${symbol.name}: $e');
+      final t = symbol.plcType.toUpperCase();
+      final esEntero = t == 'INT' || t == 'UINT' || t == 'DINT' || t == 'UDINT' ||
+          t == 'LINT' || t == 'ULINT' || t == 'WORD' || t == 'DWORD' ||
+          t == 'SINT' || t == 'USINT' || t == 'BYTE';
+      if (esEntero) {
+        _log('Valor inválido para ${symbol.name} (${symbol.plcType}): escribe un número ENTERO, sin coma ni punto.');
+      } else {
+        _log('Valor inválido para ${symbol.name} (${symbol.plcType}): $e');
+      }
     }
   }
 
