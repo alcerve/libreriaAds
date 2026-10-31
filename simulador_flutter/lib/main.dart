@@ -12,6 +12,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'ads/ads_client.dart';
 import 'ads/ams_header.dart';
@@ -820,6 +821,15 @@ class _SimulatorPageState extends State<SimulatorPage> {
                 ),
                 const Spacer(),
                 TextButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _logs.join('\n')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Log copiado al portapapeles'), duration: Duration(seconds: 1)),
+                    );
+                  },
+                  child: const Text('Copiar', style: TextStyle(color: Colors.lightGreen, fontSize: 11)),
+                ),
+                TextButton(
                   onPressed: () => setState(() => _logs.clear()),
                   child: const Text('Limpiar', style: TextStyle(color: Colors.lightGreen, fontSize: 11)),
                 ),
@@ -839,7 +849,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
                     )
                   : ListView.builder(
                       itemCount: _logs.length,
-                      itemBuilder: (context, index) => Text(
+                      itemBuilder: (context, index) => SelectableText(
                         _logs[index],
                         style: const TextStyle(color: Colors.lightGreen, fontFamily: 'monospace', fontSize: 12),
                       ),
