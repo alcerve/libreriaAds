@@ -423,13 +423,24 @@ class _SimulatorPageState extends State<SimulatorPage> {
             children: [
               const Text('Modo:'),
               const SizedBox(width: 8),
-              DropdownButton<String>(
-                value: _modo,
-                items: const [
-                  DropdownMenuItem(value: 'Simulado', child: Text('PLC Simulado')),
-                  DropdownMenuItem(value: 'Real', child: Text('PLC Real')),
-                ],
-                onChanged: running ? null : (v) => setState(() => _modo = v ?? 'Simulado'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _modo,
+                    isDense: true,
+                    items: const [
+                      DropdownMenuItem(value: 'Simulado', child: Text('PLC Simulado')),
+                      DropdownMenuItem(value: 'Real', child: Text('PLC Real')),
+                    ],
+                    onChanged: running ? null : (v) => setState(() => _modo = v ?? 'Simulado'),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               _paramField('NetId AMS', _netIdController, 130, enabled: !running),
@@ -468,13 +479,24 @@ class _SimulatorPageState extends State<SimulatorPage> {
             children: [
               const Text('Librería a probar:'),
               const SizedBox(width: 8),
-              DropdownButton<String>(
-                value: _libreriaSeleccionada,
-                items: const [
-                  DropdownMenuItem(value: 'Python', child: Text('Python (LibPhithon)')),
-                  DropdownMenuItem(value: 'C#', child: Text('C# (LibC#)')),
-                ],
-                onChanged: (v) => setState(() => _libreriaSeleccionada = v ?? 'Python'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _libreriaSeleccionada,
+                    isDense: true,
+                    items: const [
+                      DropdownMenuItem(value: 'Python', child: Text('Python (LibPhithon)')),
+                      DropdownMenuItem(value: 'C#', child: Text('C# (LibC#)')),
+                    ],
+                    onChanged: (v) => setState(() => _libreriaSeleccionada = v ?? 'Python'),
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -726,9 +748,15 @@ class _SimulatorPageState extends State<SimulatorPage> {
     final seleccionada = _seleccionadas.contains(symbol.name);
     final metodo = _metodos[symbol.name] ?? 'Ambos';
     final profundidad = symbol.name.split('.').length - 1;
+    final puedeEscribir = seleccionada && metodo != 'Leer';
 
-    return Padding(
-      padding: EdgeInsets.only(left: 8.0 + profundidad * 18.0, right: 8, top: 2, bottom: 2),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      padding: EdgeInsets.only(left: 8.0 + profundidad * 18.0, right: 4),
+      decoration: BoxDecoration(
+        color: seleccionada ? Colors.indigo.shade50 : null,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         children: [
           if (esEstructura)
@@ -786,39 +814,56 @@ class _SimulatorPageState extends State<SimulatorPage> {
               ],
             ),
           ),
-          if (seleccionada) ...[
-            DropdownButton<String>(
-              value: metodo,
-              underline: const SizedBox(),
-              style: const TextStyle(fontSize: 12),
-              items: const [
-                DropdownMenuItem(value: 'Leer', child: Text('Leer')),
-                DropdownMenuItem(value: 'Escribir', child: Text('Escribir')),
-                DropdownMenuItem(value: 'Ambos', child: Text('Ambos')),
-              ],
-              onChanged: (v) => setState(() => _metodos[symbol.name] = v ?? 'Ambos'),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 150,
-              child: TextField(
-                controller: _editors.putIfAbsent(symbol.name, () => TextEditingController()),
-                decoration: InputDecoration(
-                  hintText: _displayValue(symbol),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                ),
-                style: const TextStyle(fontSize: 12),
+          _dropdownMetodo(metodo, seleccionada, symbol),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 150,
+            child: TextField(
+              controller: _editors.putIfAbsent(symbol.name, () => TextEditingController()),
+              enabled: puedeEscribir,
+              decoration: InputDecoration(
+                hintText: seleccionada ? _displayValue(symbol) : 'marca para usar',
+                border: const OutlineInputBorder(),
+                isDense: true,
               ),
+              style: const TextStyle(fontSize: 12),
             ),
-            IconButton(
-              icon: const Icon(Icons.send),
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Escribir',
-              onPressed: () => _write(symbol),
-            ),
-          ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, size: 18),
+            visualDensity: VisualDensity.compact,
+            color: puedeEscribir ? Colors.indigo : Colors.grey,
+            tooltip: puedeEscribir ? 'Escribir' : 'Selecciona y elige Escribir/Ambos',
+            onPressed: puedeEscribir ? () => _write(symbol) : null,
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Desplegable de método (Leer/Escribir/Ambos) con borde y esquinas redondeadas.
+  Widget _dropdownMetodo(String metodo, bool seleccionada, Symbol symbol) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: seleccionada ? Colors.white : Colors.grey.shade200,
+        border: Border.all(color: seleccionada ? Colors.indigo.shade300 : Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: metodo,
+          isDense: true,
+          style: TextStyle(fontSize: 12, color: seleccionada ? Colors.black87 : Colors.grey),
+          items: const [
+            DropdownMenuItem(value: 'Leer', child: Text('Leer')),
+            DropdownMenuItem(value: 'Escribir', child: Text('Escribir')),
+            DropdownMenuItem(value: 'Ambos', child: Text('Ambos')),
+          ],
+          onChanged: seleccionada
+              ? (v) => setState(() => _metodos[symbol.name] = v ?? 'Ambos')
+              : null,
+        ),
       ),
     );
   }
