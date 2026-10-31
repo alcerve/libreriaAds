@@ -31,3 +31,7 @@ pubspec.lock
 .DS_Store
 Thumbs.db
 *.log
+
+# --- TwinCAT (exportación del usuario: no subir a repositorio público) ---
+*.tpy
+simulador_flutter/variables.json

@@ -88,7 +88,13 @@ class Device {
       if (name is! String || type is! String) continue;
       try {
         final size = sizeOf(type);
-        final encoded = encodeValue(def['value'], type);
+        final value = def['value'];
+        final Uint8List encoded;
+        if (value == null) {
+          encoded = Uint8List(size); // sin valor: se rellena con ceros
+        } else {
+          encoded = encodeValue(value, type);
+        }
         symbols.add(Symbol(name, type, size, index++, encoded));
         cargadas++;
       } catch (e) {

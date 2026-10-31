@@ -13,7 +13,7 @@ const Map<String, int> _scalarSizes = {
 
 final RegExp _stringRe = RegExp(r'^STRING\((\d+)\)$');
 final RegExp _wstringRe = RegExp(r'^WSTRING\((\d+)\)$');
-final RegExp _arrayRe = RegExp(r'^ARRAY\[([^\]]*)\]\s+OF\s+(.+)$');
+final RegExp _arrayRe = RegExp(r'^ARRAY\s*\[([^\]]*)\]\s+OF\s+(.+)$');
 
 int sizeOf(String plcType) {
   final t = plcType.trim().toUpperCase();
