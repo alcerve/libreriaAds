@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'ads/ads_client.dart';
@@ -65,6 +66,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final Set<String> _seleccionadas = {};
   final Map<String, String> _metodos = {};
   final Set<String> _expandidas = {};
+  final Set<String> _gruposExpandidos = {};
   final TextEditingController _busquedaController = TextEditingController();
   String _filtro = '';
   final Map<String, TextEditingController> _indexControllers = {};
@@ -272,24 +274,23 @@ class _SimulatorPageState extends State<SimulatorPage> {
       _log('Espera a que arranque el servidor antes de cargar variables.');
       return;
     }
-    final path = _variablesPathController.text.trim();
-    if (path.isEmpty) {
-      _log('ERROR: escribe la ruta del archivo de variables.');
-      return;
-    }
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Elegir archivo de variables',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) return; // cancelado
     try {
-      final file = File(path);
-      if (!file.existsSync()) {
-        _log('ERROR: no existe el archivo $path');
-        return;
-      }
-      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final json = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
       _device!.loadProject(json);
+      _variablesPathController.text = path;
       setState(() {
         _editors.clear();
         _seleccionadas.clear();
         _metodos.clear();
         _expandidas.clear();
+        _gruposExpandidos.clear();
         for (final symbol in _device!.symbols.byName.values) {
           _editors.putIfAbsent(symbol.name, () => TextEditingController());
         }
@@ -521,17 +522,19 @@ class _SimulatorPageState extends State<SimulatorPage> {
   }
 
   /// Guarda las variables actuales (con sus valores escalares) en el archivo JSON.
-  void _guardarVariables() {
+  Future<void> _guardarVariables() async {
     final device = _device;
     if (device == null) {
       _log('No hay variables cargadas para guardar.');
       return;
     }
-    final path = _variablesPathController.text.trim();
-    if (path.isEmpty) {
-      _log('ERROR: escribe la ruta del archivo de destino.');
-      return;
-    }
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Guardar variables',
+      fileName: 'variables.json',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (path == null) return; // cancelado
     try {
       final variables = <Map<String, dynamic>>[];
       for (final symbol in device.symbols.byName.values) {
@@ -556,6 +559,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
       }
       final json = {'types': types, 'variables': variables};
       File(path).writeAsStringSync(const JsonEncoder.withIndent('  ').convert(json));
+      _variablesPathController.text = path;
       _log('Variables guardadas en $path (${variables.length} símbolos).');
     } catch (e) {
       _log('ERROR guardando variables: $e');
@@ -620,12 +624,75 @@ class _SimulatorPageState extends State<SimulatorPage> {
         Expanded(
           child: filtered.isEmpty
               ? const Center(child: Text('Sin variables. Pulsa "Cargar" con un variables.json.'))
-              : ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) => _buildSymbolRow(filtered[index], device),
-                ),
+              : _filtro.isEmpty
+                  ? _buildTree(device)
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) => _buildSymbolRow(filtered[index], device),
+                    ),
         ),
       ],
+    );
+  }
+
+  /// Devuelve el "grupo" de una variable (lo que va antes del primer punto,
+  /// o "(raíz)" si el nombre empieza por punto).
+  String _grupoDe(String name) {
+    if (name.startsWith('.')) return '(raíz)';
+    final idx = name.indexOf('.');
+    return idx < 0 ? '(raíz)' : name.substring(0, idx);
+  }
+
+  /// Vista de árbol: variables agrupadas por su grupo (GVL, MAIN, etc.).
+  Widget _buildTree(Device device) {
+    final grupos = <String, List<Symbol>>{};
+    for (final s in device.symbols.byName.values) {
+      grupos.putIfAbsent(_grupoDe(s.name), () => []).add(s);
+    }
+    final claves = grupos.keys.toList()..sort();
+    final items = <Widget>[];
+    for (final clave in claves) {
+      final syms = grupos[clave]!..sort((a, b) => a.name.compareTo(b.name));
+      final expandido = _gruposExpandidos.contains(clave);
+      items.add(_buildGroupHeader(clave, syms.length, expandido));
+      if (expandido) {
+        for (final s in syms) {
+          items.add(_buildSymbolRow(s, device));
+        }
+      }
+    }
+    return ListView(children: items);
+  }
+
+  Widget _buildGroupHeader(String grupo, int count, bool expandido) {
+    return InkWell(
+      onTap: () => setState(() {
+        if (expandido) {
+          _gruposExpandidos.remove(grupo);
+        } else {
+          _gruposExpandidos.add(grupo);
+        }
+      }),
+      child: Container(
+        color: Colors.grey.shade100,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            Icon(expandido ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right, size: 18),
+            const SizedBox(width: 4),
+            Icon(Icons.folder, size: 16, color: Colors.amber.shade700),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                grupo,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text('$count', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+          ],
+        ),
+      ),
     );
   }
 
