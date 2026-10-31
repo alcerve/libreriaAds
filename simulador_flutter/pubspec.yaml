@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
   # Diálogo nativo para elegir dónde leer/guardar variables.
   file_picker: ^8.1.2
+  # Parser XML para leer los archivos .tpy de TwinCAT.
+  xml: ^6.5.0
 
 dev_dependencies:
   flutter_test:

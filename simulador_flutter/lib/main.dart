@@ -21,6 +21,7 @@ import 'ads/datatypes.dart';
 import 'simulator/ads_server.dart';
 import 'simulator/device.dart';
 import 'simulator/symbol_table.dart';
+import 'simulator/tpy_parser.dart';
 
 void main() => runApp(const AdsSimulatorApp());
 
@@ -269,22 +270,29 @@ class _SimulatorPageState extends State<SimulatorPage> {
     }
   }
 
-  /// Carga las variables del simulador desde un archivo JSON (para emular un PLC real).
+  /// Carga variables desde un .tpy (TwinCAT) o un .json ya convertido.
   Future<void> _cargarVariables() async {
     if (_device == null) {
       _log('Espera a que arranque el servidor antes de cargar variables.');
       return;
     }
     final result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Elegir archivo de variables',
+      dialogTitle: 'Elegir archivo de variables (.tpy o .json)',
       type: FileType.custom,
-      allowedExtensions: ['json'],
+      allowedExtensions: ['tpy', 'json'],
     );
     final path = result?.files.single.path;
     if (path == null) return; // cancelado
     try {
-      final json = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
-      _device!.loadProject(json);
+      final contenido = File(path).readAsStringSync();
+      Map<String, dynamic> proyecto;
+      if (path.toLowerCase().endsWith('.tpy')) {
+        _log('Convirtiendo $path a JSON…');
+        proyecto = parseTpy(contenido);
+      } else {
+        proyecto = jsonDecode(contenido) as Map<String, dynamic>;
+      }
+      _device!.loadProject(proyecto);
       _variablesPathController.text = path;
       setState(() {
         _editors.clear();
