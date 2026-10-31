@@ -324,7 +324,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
       final elemType = RegExp(r'ARRAY\[[^\]]*\]\s+OF\s+(.+)').firstMatch(t)!.group(1)!;
       return text.split(',').map((e) => _parseValue(e.trim(), elemType)).toList();
     }
-    if (t == 'REAL' || t == 'LREAL') return double.parse(text.trim());
+    if (t == 'REAL' || t == 'LREAL') return double.parse(text.trim().replaceAll(',', '.'));
     return int.parse(text.trim());
   }
 
@@ -334,7 +334,11 @@ class _SimulatorPageState extends State<SimulatorPage> {
       _log('Selecciona la variable y elige método Escribir/Ambos para poder escribir.');
       return;
     }
-    final text = _editors[symbol.name]?.text ?? '';
+    final text = _editors[symbol.name]?.text.trim() ?? '';
+    if (text.isEmpty) {
+      _log('Escribe un valor para ${symbol.name} antes de enviar (valor actual: ${_displayValue(symbol)}).');
+      return;
+    }
     try {
       final value = _parseValue(text, symbol.plcType);
       final encoded = encodeValue(value, symbol.plcType);
