@@ -68,7 +68,7 @@ def convertir(ruta_tpy, ruta_json):
 
     variables = []
     omitidos = 0
-    for sym in root.iter("Symbol"):
+    for sym in list(root.iter("Symbol")) + list(root.iter("VarConfig")):
         name_el = sym.find("Name")
         type_el = sym.find("Type")
         bit_el = sym.find("BitSize")
