@@ -71,6 +71,33 @@ class Device {
     add('MAIN.arrValues', 'ARRAY[0..3] OF INT', [1, 2, 3, 4]);
   }
 
+  /// Carga variables desde una lista de definiciones (mapas con `name`, `type`
+  /// y `value`), reemplazando las actuales. Útil para simular las variables de
+  /// un PLC real leyéndolas de un archivo JSON.
+  void loadVariableDefinitions(List<dynamic> definitions) {
+    symbols.byName.clear();
+    symbols.byIndex.clear();
+    symbols.byHandle.clear();
+
+    var index = 1;
+    var cargadas = 0;
+    for (final def in definitions) {
+      if (def is! Map) continue;
+      final name = def['name'];
+      final type = def['type'];
+      if (name is! String || type is! String) continue;
+      try {
+        final size = sizeOf(type);
+        final encoded = encodeValue(def['value'], type);
+        symbols.add(Symbol(name, type, size, index++, encoded));
+        cargadas++;
+      } catch (e) {
+        log('ERROR cargando variable "$name" ($type): $e');
+      }
+    }
+    log('Variables cargadas: $cargadas');
+  }
+
   void start() {
     _counterTimer?.cancel();
     _counterTimer = Timer.periodic(const Duration(milliseconds: 500), (_) => _tick());

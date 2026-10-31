@@ -1,0 +1,12 @@
+{
+  "variables": [
+    { "name": "MAIN.bStart", "type": "BOOL", "value": false },
+    { "name": "MAIN.bStop", "type": "BOOL", "value": true },
+    { "name": "MAIN.nCounter", "type": "UINT", "value": 0 },
+    { "name": "MAIN.iLevel", "type": "INT", "value": 100 },
+    { "name": "MAIN.fTemp", "type": "REAL", "value": 21.5 },
+    { "name": "MAIN.dPosition", "type": "LREAL", "value": 1.2345 },
+    { "name": "MAIN.sMessage", "type": "STRING(80)", "value": "Hola ADS" },
+    { "name": "MAIN.arrValues", "type": "ARRAY[0..3] OF INT", "value": [1, 2, 3, 4] }
+  ]
+}

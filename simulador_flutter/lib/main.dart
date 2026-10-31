@@ -52,6 +52,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
   final Map<String, TextEditingController> _editors = {};
   Timer? _refreshTimer;
   String _libreriaSeleccionada = 'Python';
+  final TextEditingController _variablesPathController = TextEditingController(
+    text: r'C:\DeepSeek Harness\libreriaAds\simulador_flutter\variables.json',
+  );
 
   @override
   void initState() {
@@ -68,6 +71,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
   void dispose() {
     _refreshTimer?.cancel();
     _portController.dispose();
+    _variablesPathController.dispose();
     for (final controller in _editors.values) {
       controller.dispose();
     }
@@ -155,6 +159,37 @@ class _SimulatorPageState extends State<SimulatorPage> {
       _log('=== Cliente $_libreriaSeleccionada terminado (código $code) ===');
     } catch (e) {
       _log('ERROR lanzando el cliente $_libreriaSeleccionada: $e');
+    }
+  }
+
+  /// Carga las variables del simulador desde un archivo JSON (para emular un PLC real).
+  Future<void> _cargarVariables() async {
+    if (_device == null) {
+      _log('Espera a que arranque el servidor antes de cargar variables.');
+      return;
+    }
+    final path = _variablesPathController.text.trim();
+    if (path.isEmpty) {
+      _log('ERROR: escribe la ruta del archivo de variables.');
+      return;
+    }
+    try {
+      final file = File(path);
+      if (!file.existsSync()) {
+        _log('ERROR: no existe el archivo $path');
+        return;
+      }
+      final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      final definiciones = (json['variables'] as List<dynamic>?) ?? const [];
+      _device!.loadVariableDefinitions(definiciones);
+      setState(() {
+        _editors.clear();
+        for (final symbol in _device!.symbols.byName.values) {
+          _editors.putIfAbsent(symbol.name, () => TextEditingController());
+        }
+      });
+    } catch (e) {
+      _log('ERROR cargando variables: $e');
     }
   }
 
@@ -284,6 +319,30 @@ class _SimulatorPageState extends State<SimulatorPage> {
                 onPressed: running ? _lanzarCliente : null,
                 icon: const Icon(Icons.play_circle_outline),
                 label: const Text('Probar cliente'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Variables (JSON):'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _variablesPathController,
+                  style: const TextStyle(fontSize: 12),
+                  decoration: const InputDecoration(
+                    hintText: 'ruta de variables.json',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.tonalIcon(
+                onPressed: _cargarVariables,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Cargar'),
               ),
             ],
           ),
