@@ -350,8 +350,9 @@ class _SimulatorPageState extends State<SimulatorPage> {
   /// Lee el valor actual de la variable (del PLC real o, en simulación, el local).
   Future<void> _leer(Symbol symbol) async {
     try {
-      if (_modo == 'Real' && _realClient != null) {
-        final bytes = await _realClient.readByName(symbol.name, symbol.size);
+      final client = _realClient;
+      if (_modo == 'Real' && client != null) {
+        final bytes = await client.readByName(symbol.name, symbol.size);
         symbol.value = Uint8List.fromList(bytes);
         _log('Lectura del PLC real: ${symbol.name} = ${_displayValue(symbol)}');
       } else {
