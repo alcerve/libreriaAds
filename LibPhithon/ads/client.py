@@ -187,40 +187,58 @@ class AdsClient:
             return self._invoke_id
 
     def _request(self, command_id, data=b""):
+        """Envía una petición y espera su respuesta correlacionada por invoke_id.
+
+        Flujo:
+          1. Reserva un invoke_id único (contador de 32 bits).
+          2. Registra un Event en ``_pending`` para que el hilo lector pueda
+             despertarnos cuando llegue la respuesta con ese mismo invoke_id.
+          3. Construye la cabecera AMS (comando, ids, flags=0 => solicitud),
+             la envuelve en el frame AMS/TCP y la manda por el socket.
+          4. Espera ``timeout`` segundos al Event. Si no llega, lanza timeout.
+          5. Si el error_code de la respuesta no es 0, lanza AdsError.
+        """
+        # Sin socket abierto no se puede transaccionar.
         if self._sock is None:
             raise AdsError(0x00000006, "Cliente no conectado (llama a open())")
+
+        # invoke_id: correlaciona petición <-> respuesta (campo de la cabecera AMS).
         invoke_id = self._next_invoke_id()
-        event = threading.Event()
-        holder = {}
+        event = threading.Event()   # se "setea" cuando el lector recibe la respuesta
+        holder = {}                 # contenedor mutable para guardar la respuesta
         with self._pending_lock:
             self._pending[invoke_id] = (event, holder)
 
+        # Cabecera AMS de solicitud: destino = PLC, origen = cliente local.
         pkt = AmsPacket()
         pkt.target_netid = self.target.netid
         pkt.target_port = self.target.port
         pkt.source_netid = self._local_netid
         pkt.source_port = self._local_ams_port
         pkt.command_id = command_id
-        pkt.state_flags = 0
+        pkt.state_flags = 0        # 0 = solicitud (1 = respuesta, 4 = notificación)
         pkt.invoke_id = invoke_id
         pkt.data = data
 
+        # Envía: cabecera AMS (32 B) + datos, todo envuelto en el frame AMS/TCP.
         try:
-            with self._send_lock:
+            with self._send_lock:  # serializa escrituras si varios hilos envían a la vez
                 send_all(self._sock, build_tcp_frame(encode_ams_packet(pkt)))
         except OSError as exc:
             self._pending.pop(invoke_id, None)
             raise AdsError(0x0000001B, "Fallo al enviar: %s" % exc)
 
+        # Espera la respuesta (o timeout). El hilo lector hará event.set().
         if not event.wait(self.timeout):
             self._pending.pop(invoke_id, None)
             raise AdsError(0x00000745, "Timeout agotado")
 
+        # Respuesta recibida: quitamos la entrada pendiente y validamos.
         self._pending.pop(invoke_id, None)
         resp = holder.get("resp")
         if resp is None:
             raise AdsError(0x00000001, "Conexión cerrada sin respuesta")
-        if resp.error_code != 0:
+        if resp.error_code != 0:   # el PLC devolvió un código de error ADS
             raise AdsError(resp.error_code)
         return resp.data
 
@@ -301,6 +319,12 @@ class AdsClient:
         self._request(C.ADS_CMD_WRITE, payload)
 
     def read_by_name(self, name, plc_datatype=None):
+        """Lee una variable por su nombre (índice de grupo SYM_VALBYNAME).
+
+        Payload de lectura:
+          [index_group u32][index_offset u32][longitud_nombre u32][nombre][bytes_a_leer u32]
+        """
+        # Si no dan tipo, lo resolvemos pidiendo la info del símbolo al PLC.
         if plc_datatype is None:
             size = self.read_symbol_info(name).size
         else:
@@ -310,12 +334,19 @@ class AdsClient:
             struct.pack("<III", C.INDEXGROUP_SYM_VALBYNAME, 0, len(nb)) + nb + struct.pack("<I", size)
         )
         data = self._request(C.ADS_CMD_READ, payload)
+        # Con tipo: devolvemos el valor ya decodificado; sin tipo: bytes crudos.
         if plc_datatype is not None:
             return datatypes.decode_value(data, plc_datatype)
         return data
 
     def write_by_name(self, name, value, plc_datatype=None):
+        """Escribe una variable por su nombre (índice de grupo SYM_VALBYNAME).
+
+        Payload de escritura:
+          [index_group u32][index_offset u32][longitud_nombre u32][nombre][longitud_valor u32][valor]
+        """
         nb = name.encode("utf-8")
+        # El valor puede venir ya como bytes, o codificarse desde un tipo PLC.
         if plc_datatype is not None:
             data = datatypes.encode_value(value, plc_datatype)
         elif isinstance(value, (bytes, bytearray)):

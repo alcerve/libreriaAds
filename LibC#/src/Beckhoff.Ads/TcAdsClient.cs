@@ -166,12 +166,15 @@ public sealed class TcAdsClient : IDisposable
 
     private AdsResponse Request(ushort commandId, byte[] data)
     {
+        // Flujo: reservar invoke_id -> registrar TCS -> enviar -> esperar -> validar error.
         if (_stream == null) throw new AdsException(AdsErrorCode.TargetPortNotFound, "Cliente no conectado (llama a Connect())");
 
+        // invoke_id correlaciona petición y respuesta (campo de la cabecera AMS).
         uint invokeId = unchecked((uint)Interlocked.Increment(ref _invokeIdCounter));
         var tcs = new TaskCompletionSource<AdsResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[invokeId] = tcs;
+        _pending[invokeId] = tcs; // el lector completará esta tarea al llegar la respuesta
 
+        // Cabecera AMS de solicitud: destino = PLC, origen = cliente local, flags=0.
         var header = new AmsHeader
         {
             TargetNetId = TargetNetId,
@@ -179,14 +182,15 @@ public sealed class TcAdsClient : IDisposable
             SourceNetId = _localNetId,
             SourcePort = _localAmsPort,
             CommandId = commandId,
-            StateFlags = 0,
+            StateFlags = 0,   // 0 = solicitud (1 = respuesta, 4 = notificación)
             InvokeId = invokeId,
         };
 
+        // Frame AMS/TCP = 6 bytes (reservado + longitud) + cabecera AMS (32) + datos.
         var frame = BuildFrame(header, data);
         try
         {
-            lock (_sendLock)
+            lock (_sendLock) // serializa escrituras si varios hilos envían a la vez
             {
                 _stream.Write(frame, 0, frame.Length);
                 _stream.Flush();
@@ -198,6 +202,7 @@ public sealed class TcAdsClient : IDisposable
             throw new AdsException(AdsErrorCode.HostUnreachable, $"Fallo al enviar: {ex.Message}");
         }
 
+        // Espera la respuesta con timeout; el lector completa la tarea al correlacionar invoke_id.
         if (!tcs.Task.Wait(TimeoutMs))
         {
             _pending.TryRemove(invokeId, out _);
@@ -205,7 +210,7 @@ public sealed class TcAdsClient : IDisposable
         }
 
         var resp = tcs.Task.Result;
-        if (resp.ErrorCode != 0)
+        if (resp.ErrorCode != 0) // el PLC devolvió un código de error ADS
             throw new AdsException(resp.ErrorCode);
         return resp;
     }
@@ -266,8 +271,10 @@ public sealed class TcAdsClient : IDisposable
     // ------------------------------------------------------------------ símbolos
     public byte[] ReadSymbol(string name, int size)
     {
+        // Payload de lectura por nombre:
+        //   [index_group u32][index_offset u32][longitud_nombre u32][nombre][bytes_a_leer u32]
         var nb = Encoding.UTF8.GetBytes(name);
-        var payload = new byte[16 + nb.Length];
+        var payload = new byte[16 + nb.Length]; // 12 (ig+io+len) + nombre + 4 (size)
         BinaryPrimitives.WriteUInt32LittleEndian(payload, AdsIndexGroups.SymValByName);
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4), 0);
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(8), (uint)nb.Length);
@@ -282,8 +289,10 @@ public sealed class TcAdsClient : IDisposable
 
     public void WriteSymbol(string name, byte[] value)
     {
+        // Payload de escritura por nombre:
+        //   [index_group u32][index_offset u32][longitud_nombre u32][nombre][longitud_valor u32][valor]
         var nb = Encoding.UTF8.GetBytes(name);
-        var payload = new byte[16 + nb.Length + value.Length];
+        var payload = new byte[16 + nb.Length + value.Length]; // 12 + nombre + 4 (len) + valor
         BinaryPrimitives.WriteUInt32LittleEndian(payload, AdsIndexGroups.SymValByName);
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(4), 0);
         BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(8), (uint)nb.Length);

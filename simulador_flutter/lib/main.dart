@@ -411,15 +411,17 @@ class _SimulatorPageState extends State<SimulatorPage> {
   /// Construye la trama ADS de escritura (WRITE por nombre) que se enviaría a un
   /// PLC, para mostrarla explicada en el log de comunicación.
   Uint8List _buildWriteFrame(String name, Uint8List value) {
+    // Payload de escritura por nombre:
+    //   [index_group u32][index_offset u32][longitud_nombre u32][nombre][longitud_valor u32][valor]
     final nb = Uint8List.fromList(utf8.encode(name));
-    final payload = Uint8List(12 + nb.length + 4 + value.length);
+    final payload = Uint8List(12 + nb.length + 4 + value.length); // 12 + nombre + 4 (len) + valor
     final d = ByteData.sublistView(payload);
-    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little);
-    d.setUint32(4, 0, Endian.little);
-    d.setUint32(8, nb.length, Endian.little);
-    payload.setRange(12, 12 + nb.length, nb);
-    d.setUint32(12 + nb.length, value.length, Endian.little);
-    payload.setRange(16 + nb.length, 16 + nb.length + value.length, value);
+    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little); // 0xF005 = SYM_VALBYNAME
+    d.setUint32(4, 0, Endian.little);                            // index_offset = 0
+    d.setUint32(8, nb.length, Endian.little);                    // longitud del nombre
+    payload.setRange(12, 12 + nb.length, nb);                    // nombre en UTF-8
+    d.setUint32(12 + nb.length, value.length, Endian.little);    // longitud del valor
+    payload.setRange(16 + nb.length, 16 + nb.length + value.length, value); // valor
 
     AmsNetId targetNetId;
     try {
@@ -443,14 +445,16 @@ class _SimulatorPageState extends State<SimulatorPage> {
   /// Construye la trama ADS de lectura (READ por nombre) que se enviaría a un
   /// PLC, para mostrarla explicada en el log de comunicación.
   Uint8List _buildReadFrame(String name, int size) {
+    // Payload de lectura por nombre:
+    //   [index_group u32][index_offset u32][longitud_nombre u32][nombre][bytes_a_leer u32]
     final nb = Uint8List.fromList(utf8.encode(name));
-    final payload = Uint8List(12 + nb.length + 4);
+    final payload = Uint8List(12 + nb.length + 4); // 12 + nombre + 4 (size)
     final d = ByteData.sublistView(payload);
-    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little);
-    d.setUint32(4, 0, Endian.little);
-    d.setUint32(8, nb.length, Endian.little);
-    payload.setRange(12, 12 + nb.length, nb);
-    d.setUint32(12 + nb.length, size, Endian.little);
+    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little); // 0xF005 = SYM_VALBYNAME
+    d.setUint32(4, 0, Endian.little);                            // index_offset = 0
+    d.setUint32(8, nb.length, Endian.little);                    // longitud del nombre
+    payload.setRange(12, 12 + nb.length, nb);                    // nombre en UTF-8
+    d.setUint32(12 + nb.length, size, Endian.little);            // bytes a leer
 
     AmsNetId targetNetId;
     try {
