@@ -350,6 +350,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
   /// Lee el valor actual de la variable (del PLC real o, en simulación, el local).
   Future<void> _leer(Symbol symbol) async {
     try {
+      _log(explainFrame('ENVIADO (lectura)', _buildReadFrame(symbol.name, symbol.size)));
       final client = _realClient;
       if (_modo == 'Real' && client != null) {
         final bytes = await client.readByName(symbol.name, symbol.size);
@@ -433,6 +434,37 @@ class _SimulatorPageState extends State<SimulatorPage> {
       ..sourceNetId = AmsNetId.fromString('127.0.0.1.1.1')
       ..sourcePort = 30000
       ..commandId = AdsCommand.write
+      ..stateFlags = 0
+      ..invokeId = 1
+      ..data = payload;
+    return buildTcpFrame(header.encode());
+  }
+
+  /// Construye la trama ADS de lectura (READ por nombre) que se enviaría a un
+  /// PLC, para mostrarla explicada en el log de comunicación.
+  Uint8List _buildReadFrame(String name, int size) {
+    final nb = Uint8List.fromList(utf8.encode(name));
+    final payload = Uint8List(12 + nb.length + 4);
+    final d = ByteData.sublistView(payload);
+    d.setUint32(0, AdsIndexGroup.symValByName, Endian.little);
+    d.setUint32(4, 0, Endian.little);
+    d.setUint32(8, nb.length, Endian.little);
+    payload.setRange(12, 12 + nb.length, nb);
+    d.setUint32(12 + nb.length, size, Endian.little);
+
+    AmsNetId targetNetId;
+    try {
+      targetNetId = AmsNetId.fromString(_netIdController.text);
+    } catch (_) {
+      targetNetId = AmsNetId.empty();
+    }
+
+    final header = AmsHeader()
+      ..targetNetId = targetNetId
+      ..targetPort = int.tryParse(_amsPortController.text) ?? 851
+      ..sourceNetId = AmsNetId.fromString('127.0.0.1.1.1')
+      ..sourcePort = 30000
+      ..commandId = AdsCommand.read
       ..stateFlags = 0
       ..invokeId = 1
       ..data = payload;
