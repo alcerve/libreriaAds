@@ -22,6 +22,7 @@ DOCS = [
     ("docs/04-manual-simulador.md", "04-manual-simulador.docx"),
     ("docs/05-guia-integracion.md", "05-guia-integracion.docx"),
     ("docs/06-manual-tramas.md", "06-manual-tramas.docx"),
+    ("docs/07-manual-programador.md", "07-manual-programador.docx"),
 ]
 
 INLINE_RE = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]*\))")

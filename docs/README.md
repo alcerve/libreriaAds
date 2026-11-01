@@ -18,6 +18,8 @@ protocolo **ADS (Automation Device Specification)** de Beckhoff, más un
    piezas juntas, paso a paso.
 6. [Manual del log de tramas ADS](06-manual-tramas.md) — cómo leer la trama en
    hexadecimal y qué significa cada campo del log de comunicación.
+7. [Manual del programador](07-manual-programador.md) — cómo compilar y usar las
+   dos librerías: qué método llamar y con qué parámetros.
 
 ## Lectura rápida
 
@@ -28,6 +30,7 @@ protocolo **ADS (Automation Device Specification)** de Beckhoff, más un
 | Usar la librería C# | [`03-manual-csharp.md`](03-manual-csharp.md) |
 | Arrancar el simulador | [`04-manual-simulador.md`](04-manual-simulador.md) |
 | Probar todo el conjunto | [`05-guia-integracion.md`](05-guia-integracion.md) |
+| Compilar y usar las librerías (métodos + parámetros) | [`07-manual-programador.md`](07-manual-programador.md) |
 
 ## Estructura del repositorio
 
