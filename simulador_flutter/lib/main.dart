@@ -330,7 +330,7 @@ class _SimulatorPageState extends State<SimulatorPage> {
     }
     if (t == 'STRING' || t.startsWith('STRING(')) return text;
     if (t.startsWith('ARRAY')) {
-      final elemType = RegExp(r'ARRAY\[[^\]]*\]\s+OF\s+(.+)').firstMatch(t)!.group(1)!;
+      final elemType = RegExp(r'ARRAY\s*\[[^\]]*\]\s+OF\s+(.+)').firstMatch(t)!.group(1)!;
       return text.split(',').map((e) => _parseValue(e.trim(), elemType)).toList();
     }
     if (t == 'REAL' || t == 'LREAL') return double.parse(text.trim().replaceAll(',', '.'));
@@ -368,6 +368,12 @@ class _SimulatorPageState extends State<SimulatorPage> {
     final metodo = _metodos[symbol.name] ?? 'Ambos';
     if (!_seleccionadas.contains(symbol.name) || metodo == 'Leer') {
       _log('Selecciona la variable y elige método Escribir/Ambos para poder escribir.');
+      return;
+    }
+    // Si es un array de estructuras, no se escribe directamente: se expande por índice.
+    final parsed = _device?.parseArrayType(symbol.plcType);
+    if (parsed != null && (_device?.types.containsKey(parsed.$3) ?? false)) {
+      _log('${symbol.name} es un array de estructuras. Usa el índice (▶) para expandir y editar sus miembros.');
       return;
     }
     final text = _editors[symbol.name]?.text.trim() ?? '';
