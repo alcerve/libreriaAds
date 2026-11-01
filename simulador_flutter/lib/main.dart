@@ -337,6 +337,32 @@ class _SimulatorPageState extends State<SimulatorPage> {
     return int.parse(text.trim());
   }
 
+  /// Ejecuta la acción del botón según el método: leer (Leer) o escribir.
+  void _accionBoton(Symbol symbol) {
+    final metodo = _metodos[symbol.name] ?? 'Ambos';
+    if (metodo == 'Leer') {
+      _leer(symbol);
+    } else {
+      _write(symbol);
+    }
+  }
+
+  /// Lee el valor actual de la variable (del PLC real o, en simulación, el local).
+  Future<void> _leer(Symbol symbol) async {
+    try {
+      if (_modo == 'Real' && _realClient != null) {
+        final bytes = await _realClient.readByName(symbol.name, symbol.size);
+        symbol.value = Uint8List.fromList(bytes);
+        _log('Lectura del PLC real: ${symbol.name} = ${_displayValue(symbol)}');
+      } else {
+        _log('Lectura local: ${symbol.name} = ${_displayValue(symbol)}');
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      _log('Error leyendo ${symbol.name}: $e');
+    }
+  }
+
   void _write(Symbol symbol) {
     final metodo = _metodos[symbol.name] ?? 'Ambos';
     if (!_seleccionadas.contains(symbol.name) || metodo == 'Leer') {
@@ -867,11 +893,15 @@ class _SimulatorPageState extends State<SimulatorPage> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.send, size: 18),
+            icon: Icon(metodo == 'Leer' ? Icons.visibility : Icons.send, size: 18),
             visualDensity: VisualDensity.compact,
-            color: puedeEscribir ? Colors.indigo : Colors.grey,
-            tooltip: puedeEscribir ? 'Escribir' : 'Selecciona y elige Escribir/Ambos',
-            onPressed: puedeEscribir ? () => _write(symbol) : null,
+            color: !seleccionada
+                ? Colors.grey
+                : (metodo == 'Leer' ? Colors.blue : Colors.indigo),
+            tooltip: !seleccionada
+                ? 'Selecciona la variable'
+                : (metodo == 'Leer' ? 'Leer valor' : 'Escribir valor'),
+            onPressed: seleccionada ? () => _accionBoton(symbol) : null,
           ),
         ],
       ),
