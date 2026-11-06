@@ -137,3 +137,38 @@ Métodos:
 cd LibPhithon
 python -m unittest discover -s tests -v
 ```
+
+## 2.8. Leer/escribir estructuras completas
+
+Para leer o escribir una **estructura completa** (todos sus miembros de una vez),
+define su disposición con `StructMember` y `StructDefinition`:
+
+```python
+from ads import AdsClient, StructMember, StructDefinition
+
+posicion = StructDefinition([
+    StructMember("X", "LREAL", 0),      # offset 0 bytes
+    StructMember("Y", "LREAL", 8),      # offset 8 bytes
+    StructMember("Activo", "BOOL", 16), # offset 16 bytes
+], total_size=24)
+
+with AdsClient(ams_net_id="127.0.0.1.1.1", ams_port=851,
+               ip_address="127.0.0.1", tcp_port=48898) as c:
+    # Leer toda la estructura de golpe (una sola lectura)
+    valores = c.read_struct("GVL.Posicion", posicion)
+    # -> {"X": 1.0, "Y": 2.0, "Activo": True}
+
+    # Escribir toda la estructura de golpe (una sola escritura)
+    c.write_struct("GVL.Posicion", posicion,
+                   {"X": 3.0, "Y": 4.0, "Activo": False})
+```
+
+| Elemento | Qué hace |
+|----------|----------|
+| `StructMember(nombre, tipo_plc, offset_bytes)` | Define un miembro (nombre, tipo y offset en bytes). |
+| `StructDefinition(miembros, total_size=None)` | Define la estructura. Sin `total_size`, se calcula como `max(offset + tamaño)`. |
+| `read_struct(nombre, def)` | Lee la estructura y devuelve `{miembro: valor}`. |
+| `write_struct(nombre, def, valores)` | Escribe la estructura desde `{miembro: valor}`. |
+
+> El `offset` de cada miembro es su **offset en bytes** dentro de la estructura.
+> En el `.tpy` de TwinCAT viene como `BitOffs`: divídelo entre 8.

@@ -277,6 +277,39 @@ uint handle = client.AddNotificationByName(
 client.DeleteDeviceNotification(handle);
 ```
 
+### 7.5.4. Leer/escribir estructuras completas
+
+**Python:**
+
+```python
+from ads import AdsClient, StructMember, StructDefinition
+
+posicion = StructDefinition([
+    StructMember("X", "LREAL", 0),
+    StructMember("Y", "LREAL", 8),
+    StructMember("Activo", "BOOL", 16),
+], total_size=24)
+
+with AdsClient(...) as c:
+    valores = c.read_struct("GVL.Posicion", posicion)   # dict {miembro: valor}
+    c.write_struct("GVL.Posicion", posicion, {"X": 3.0, "Y": 4.0, "Activo": False})
+```
+
+**C#:**
+
+```csharp
+var posicion = new PlcStruct(new[]
+{
+    new PlcMember("X", "LREAL", 0),
+    new PlcMember("Y", "LREAL", 8),
+    new PlcMember("Activo", "BOOL", 16),
+}, totalSize: 24);
+
+var valores = client.ReadStruct("GVL.Posicion", posicion);   // Dictionary<string, object?>
+client.WriteStruct("GVL.Posicion", posicion, new Dictionary<string, object?>
+    { ["X"] = 3.0, ["Y"] = 4.0, ["Activo"] = false });
+```
+
 ---
 
 ## 7.6. Resumen: qué método usar según la necesidad
@@ -288,6 +321,8 @@ client.DeleteDeviceNotification(handle);
 | Leer una variable por nombre | `read_by_name("X", "TIPO")` | `ReadValue<T>("X", "TIPO")` |
 | Escribir una variable por nombre | `write_by_name("X", valor, "TIPO")` | `WriteValue<T>("X", valor, "TIPO")` |
 | Leer bytes crudos | `read_by_name("X")` | `ReadSymbol("X")` |
+| Leer una estructura completa | `read_struct("X", def)` | `ReadStruct("X", def)` |
+| Escribir una estructura completa | `write_struct("X", def, vals)` | `WriteStruct("X", def, vals)` |
 | Leer por índice/offset | `read_index(ig, io, size)` | `ReadAny(ig, io, length)` |
 | Suscribir notificación | `add_device_notification(...)` | `AddDeviceNotification(...)` |
 | Cerrar | `close()` | `Disconnect()` |

@@ -302,6 +302,20 @@ public sealed class TcAdsClient : IDisposable
         Request(AdsCommands.Write, payload);
     }
 
+    /// <summary>Lee una estructura completa y devuelve un dict {miembro: valor}.</summary>
+    public Dictionary<string, object?> ReadStruct(string name, PlcStruct def)
+    {
+        // ReadSymbol(name) lee todo el bloque de bytes del símbolo (su tamaño real).
+        var data = ReadSymbol(name);
+        return def.Decode(data);
+    }
+
+    /// <summary>Escribe una estructura completa desde un dict {miembro: valor}.</summary>
+    public void WriteStruct(string name, PlcStruct def, Dictionary<string, object?> values)
+    {
+        WriteSymbol(name, def.Encode(values));
+    }
+
     public uint CreateVariableHandle(string name)
     {
         var nb = Encoding.UTF8.GetBytes(name);

@@ -361,6 +361,24 @@ class AdsClient:
         )
         self._request(C.ADS_CMD_WRITE, payload)
 
+    # ------------------------------------------------------- estructuras
+    def read_struct(self, name, struct_def):
+        """Lee una estructura completa y devuelve un dict {miembro: valor}.
+
+        Hace una única lectura del bloque de bytes de la estructura (usando el
+        tamaño real del símbolo) y descodifica cada miembro según su offset.
+        """
+        data = self.read_by_name(name)  # bytes crudos de toda la estructura
+        return struct_def.decode(data)
+
+    def write_struct(self, name, struct_def, values):
+        """Escribe una estructura completa a partir de un dict {miembro: valor}.
+
+        Codifica cada miembro en su offset dentro del bloque y hace una única
+        escritura de toda la estructura.
+        """
+        self.write_by_name(name, struct_def.encode(values))
+
     # ------------------------------------------------------- notificaciones
     def add_device_notification(
         self,

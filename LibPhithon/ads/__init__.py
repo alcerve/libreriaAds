@@ -4,6 +4,7 @@ from .ams_netid import AmsNetId
 from .ams_addr import AmsAddr
 from .errors import AdsError
 from .client import AdsClient, SymbolInfo, NotificationSample
+from .datatypes import StructMember, StructDefinition
 from . import constants
 from . import datatypes
 
@@ -16,6 +17,8 @@ __all__ = [
     "AdsError",
     "SymbolInfo",
     "NotificationSample",
+    "StructMember",
+    "StructDefinition",
     "constants",
     "datatypes",
 ]

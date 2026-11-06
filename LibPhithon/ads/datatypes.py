@@ -167,3 +167,50 @@ def decode_value(data, plc_type):
         return items
 
     raise ValueError("Tipo PLC no soportado: %r" % t)
+
+
+class StructMember:
+    """Un miembro de una estructura PLC (nombre, tipo y offset en bytes)."""
+
+    def __init__(self, name, plc_type, byte_offset=0):
+        self.name = name
+        self.plc_type = plc_type
+        self.byte_offset = int(byte_offset)
+        self.size = size_of(plc_type)
+
+    def __repr__(self):
+        return "StructMember(name=%r, type=%r, offset=%d)" % (self.name, self.plc_type, self.byte_offset)
+
+
+class StructDefinition:
+    """Definición de una estructura PLC: lista de miembros + tamaño total.
+
+    Permite leer/escribir una estructura **completa** como un dict
+    ``{nombre_miembro: valor}``, de forma automática (una sola lectura/escritura
+    del bloque de bytes de la estructura).
+    """
+
+    def __init__(self, members, total_size=None):
+        self.members = list(members)
+        self.total_size = int(total_size) if total_size is not None else self._compute_size()
+
+    def _compute_size(self):
+        """Tamaño = mayor (offset + tamaño) de todos los miembros."""
+        return max((m.byte_offset + m.size for m in self.members), default=0)
+
+    def decode(self, data):
+        """Decodifica un bloque de bytes en un dict ``{nombre: valor}``."""
+        out = {}
+        for m in self.members:
+            chunk = data[m.byte_offset : m.byte_offset + m.size]
+            out[m.name] = decode_value(chunk, m.plc_type)
+        return out
+
+    def encode(self, values):
+        """Codifica un dict ``{nombre: valor}`` en un bloque de bytes."""
+        buf = bytearray(self.total_size)
+        for m in self.members:
+            if m.name in values:
+                chunk = encode_value(values[m.name], m.plc_type)
+                buf[m.byte_offset : m.byte_offset + m.size] = chunk
+        return bytes(buf)

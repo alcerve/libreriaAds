@@ -126,6 +126,7 @@ new TcAdsClient(amsNetId, amsPort, ipAddress, tcpPort, timeoutMs)
 | `AdsConstants.cs`, `AdsErrorCode.cs` | Constantes y códigos de error. |
 | `AdsException.cs`, `AdsDeviceInfo.cs`, `AdsSymbolInfo.cs`, `NotificationStamp.cs` | Tipos de datos. |
 | `PlcType.cs` | Codificación de tipos PLC. |
+| `PlcStruct.cs` | `PlcMember` y `PlcStruct` para leer/escribir estructuras completas. |
 | `TcAdsClient.cs` | Cliente principal. |
 
 ## 3.6. Pruebas
@@ -134,3 +135,43 @@ new TcAdsClient(amsNetId, amsPort, ipAddress, tcpPort, timeoutMs)
 cd LibC#/tests/Ads.Tests
 dotnet run
 ```
+
+## 3.7. Leer/escribir estructuras completas
+
+Para leer o escribir una **estructura completa** (todos sus miembros de una vez),
+define su disposición con `PlcMember` y `PlcStruct`:
+
+```csharp
+using Beckhoff.Ads;
+
+var posicion = new PlcStruct(new[]
+{
+    new PlcMember("X", "LREAL", 0),      // offset 0 bytes
+    new PlcMember("Y", "LREAL", 8),      // offset 8 bytes
+    new PlcMember("Activo", "BOOL", 16), // offset 16 bytes
+}, totalSize: 24);
+
+using var client = new TcAdsClient(...);
+client.Connect();
+
+// Leer toda la estructura de golpe (una sola lectura)
+Dictionary<string, object?> valores = client.ReadStruct("GVL.Posicion", posicion);
+
+// Escribir toda la estructura de golpe (una sola escritura)
+client.WriteStruct("GVL.Posicion", posicion, new Dictionary<string, object?>
+{
+    ["X"] = 3.0,
+    ["Y"] = 4.0,
+    ["Activo"] = false,
+});
+```
+
+| Elemento | Qué hace |
+|----------|----------|
+| `new PlcMember(nombre, tipoPlc, offsetBytes)` | Define un miembro (nombre, tipo y offset en bytes). |
+| `new PlcStruct(miembros, totalSize)` | Define la estructura. Sin `totalSize`, se calcula como `max(offset + tamaño)`. |
+| `client.ReadStruct(nombre, def)` | Lee la estructura y devuelve `Dictionary<string, object?>`. |
+| `client.WriteStruct(nombre, def, valores)` | Escribe la estructura desde `Dictionary<string, object?>`. |
+
+> El `offset` de cada miembro es su **offset en bytes** dentro de la estructura.
+> En el `.tpy` de TwinCAT viene como `BitOffs`: divídelo entre 8.
